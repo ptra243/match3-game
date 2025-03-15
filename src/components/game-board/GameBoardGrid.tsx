@@ -7,7 +7,32 @@ interface GameBoardGridProps {
 }
 
 export const GameBoardGrid: React.FC<GameBoardGridProps> = ({ activeTile }) => {
-  const { board, selectedTile } = useGameStore();
+  const { board, selectedTile, signalAnimationComplete } = useGameStore();
+
+  // Track animation count to know when all animations are complete
+  const [animatingTiles, setAnimatingTiles] = React.useState(0);
+
+  React.useEffect(() => {
+    // Count how many tiles are currently animating
+    let count = 0;
+    board.forEach(row => {
+      row.forEach(tile => {
+        if (tile.isAnimating) count++;
+      });
+    });
+    setAnimatingTiles(count);
+  }, [board]);
+
+  // When all animations complete, signal it
+  React.useEffect(() => {
+    if (animatingTiles === 0) {
+      signalAnimationComplete();
+    }
+  }, [animatingTiles, signalAnimationComplete]);
+
+  const handleAnimationEnd = React.useCallback(() => {
+    setAnimatingTiles(prev => Math.max(0, prev - 1));
+  }, []);
 
   return (
     <div
@@ -26,9 +51,7 @@ export const GameBoardGrid: React.FC<GameBoardGridProps> = ({ activeTile }) => {
             col={colIndex}
             isDragging={activeTile?.row === rowIndex && activeTile?.col === colIndex}
             isAiSelected={selectedTile?.row === rowIndex && selectedTile?.col === colIndex}
-            onAnimationEnd={tile.isAnimating ? () => {
-              // Animation end handled by the match slice
-            } : undefined}
+            onAnimationEnd={tile.isAnimating ? handleAnimationEnd : undefined}
           />
         ))
       )}

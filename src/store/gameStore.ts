@@ -7,6 +7,8 @@ import { Color, PlayerState, Player } from './types';
 
 interface GameStore extends BoardSlice, PlayerSlice, MatchSlice {
   isGameOver: boolean;
+  animationInProgress: boolean;
+  signalAnimationComplete: () => void;
   resetGame: () => void;
 }
 
@@ -20,23 +22,10 @@ const createInitialPlayerState = (isHuman: boolean = false): PlayerState => ({
     black: 0,
     empty: 0,
   },
-  skill: isHuman ? {
-    name: "Cyclone",
-    description: "Use 5 red gems to destroy a black tile and its surrounding tiles",
-    isReady: false,
-    isSelected: false,
-    cost: 5,
-    damage: 0,
-    color: 'red' as Color,
-    targetColor: 'black' as Color
-  } : {
-    name: "Power Blast",
-    description: "Deal 5 damage using 5 matched gems",
-    isReady: false,
-    isSelected: false,
-    cost: 5,
-    damage: 5
-  }
+  className: isHuman ? 'pyromancer' : 'shadowPriest',
+  activeSkillIndex: null,
+  statusEffects: [],
+  skillCastCount: {}
 });
 
 export const useGameStore = create<GameStore>()((...args) => {
@@ -47,6 +36,8 @@ export const useGameStore = create<GameStore>()((...args) => {
 
   return {
     isGameOver: false,
+    animationInProgress: false,
+    signalAnimationComplete: () => {},
     resetGame: () => {
       set({
         human: createInitialPlayerState(true),
@@ -56,6 +47,7 @@ export const useGameStore = create<GameStore>()((...args) => {
         selectedTile: null,
         currentMatchSequence: 0,
         currentCombo: 0,
+        animationInProgress: false,
       });
       boardSlice.initializeBoard();
     },

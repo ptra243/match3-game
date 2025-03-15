@@ -3,6 +3,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { useGameStore } from '../../store/gameStore';
 import { Tile } from '../../store/types';
 import { TileIcon } from './TileIcon';
+import { CLASSES } from '../../store/classes';
 
 interface GameTileProps {
   tile: Tile;
@@ -31,26 +32,28 @@ export const GameTile: React.FC<GameTileProps> = ({
   onAnimationEnd 
 }) => {
   const { currentPlayer, selectedTile, human, selectTile, useSkill } = useGameStore();
-  const isSkillReady = human.skill.isReady && currentPlayer === 'human' && human.skill.isSelected;
-  const isBlackTile = tile.color === 'black';
+  const characterClass = CLASSES[human.className];
+  const activeSkill = human.activeSkillIndex !== null ? characterClass.skills[human.activeSkillIndex] : null;
+  const isSkillActive = currentPlayer === 'human' && activeSkill !== null;
+  const canTargetWithSkill = isSkillActive && (!activeSkill.targetColor || tile.color === activeSkill.targetColor);
   const isSelected = selectedTile?.row === row && selectedTile?.col === col;
   const isHumanTurn = currentPlayer === 'human';
 
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `${row}-${col}`,
     data: { row, col },
-    disabled: !isHumanTurn || isSkillReady || tile.isAnimating,
+    disabled: !isHumanTurn || (isSkillActive && !canTargetWithSkill) || tile.isAnimating,
   });
 
   const { setNodeRef: setDropRef } = useDroppable({
     id: `${row}-${col}`,
     data: { row, col },
-    disabled: !isHumanTurn || isSkillReady || tile.isAnimating,
+    disabled: !isHumanTurn || (isSkillActive && !canTargetWithSkill) || tile.isAnimating,
   });
 
   const handleClick = () => {
     if (!isHumanTurn) return;
-    if (isSkillReady && isBlackTile) {
+    if (isSkillActive && canTargetWithSkill) {
       selectTile(row, col);
       useSkill(row, col);
     }
@@ -66,15 +69,16 @@ export const GameTile: React.FC<GameTileProps> = ({
       {...attributes}
       {...listeners}
       className={`w-full h-full rounded-lg ${colorClasses[tile.color]} 
-        flex items-center justify-center ${!isHumanTurn ? 'cursor-not-allowed' : (!isSkillReady || (isSkillReady && isBlackTile) ? 'cursor-move' : 'cursor-not-allowed')} shadow-md 
+        flex items-center justify-center ${!isHumanTurn ? 'cursor-not-allowed' : (!isSkillActive || (isSkillActive && canTargetWithSkill) ? 'cursor-move' : 'cursor-not-allowed')} shadow-md 
         hover:shadow-lg
         ${isDragging ? 'opacity-50 scale-105' : 'opacity-100 scale-100'}
         ${isAiSelected ? 'ring-4 ring-white ring-opacity-50 animate-pulse' : ''}
         ${tile.isMatched ? 'ring-4 ring-white ring-opacity-75 animate-[explode_0.5s_ease-out]' : ''}
         ${isSelected ? 'ring-4 ring-yellow-400 ring-opacity-75' : ''}
         ${tile.color === 'empty' ? 'pointer-events-none' : ''}
-        ${isSkillReady && isBlackTile && isHumanTurn ? 'cursor-pointer hover:ring-4 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
+        ${isSkillActive && canTargetWithSkill && isHumanTurn ? 'cursor-pointer hover:ring-4 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
         ${tile.isAnimating ? 'animate-[fallIn_0.5s_ease-in-out]' : ''}
+        ${tile.isFrozen ? 'ring-2 ring-blue-200 ring-opacity-75' : ''}
         transition-all duration-500`}
       onAnimationEnd={onAnimationEnd}
     >
