@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
 import { CLASSES } from '../classes';
+import { ALL_SKILLS } from '../skills';
 import type { GameState, Color, Tile } from '../types';
 import { toast } from 'react-hot-toast';
 
@@ -25,16 +26,18 @@ const createMockGameState = (): GameState => ({
   human: {
     health: 100,
     matchedColors: { red: 0, blue: 0, green: 0, yellow: 0, black: 0, empty: 0 },
-    className: '',
-    activeSkillIndex: null,
+    className: 'pyromancer',
+    activeSkillId: null,
+    equippedSkills: ['fiery_soul', 'fireball'],
     statusEffects: [],
     skillCastCount: {}
   },
   ai: {
     health: 100,
     matchedColors: { red: 0, blue: 0, green: 0, yellow: 0, black: 0, empty: 0 },
-    className: '',
-    activeSkillIndex: null,
+    className: 'shadowPriest',
+    activeSkillId: null,
+    equippedSkills: ['void_touch', 'dark_ritual'],
     statusEffects: [],
     skillCastCount: {}
   },
@@ -60,7 +63,9 @@ const createMockGameState = (): GameState => ({
   useSkill: vi.fn(),
   switchPlayer: vi.fn(),
   makeAiMove: vi.fn(),
-  selectClass: vi.fn()
+  selectClass: vi.fn(),
+  updateTile: vi.fn(),
+  equipSkill: vi.fn()
 });
 
 describe('Class System', () => {
@@ -88,7 +93,8 @@ describe('Class System', () => {
           empty: 0
         },
         className: 'pyromancer',
-        activeSkillIndex: null,
+        activeSkillId: null,
+        equippedSkills: ['fiery_soul', 'fireball'],
         statusEffects: [],
         skillCastCount: {}
       },
@@ -102,8 +108,9 @@ describe('Class System', () => {
           black: 0,
           empty: 0
         },
-        className: 'cryomancer',
-        activeSkillIndex: null,
+        className: 'shadowPriest',
+        activeSkillId: null,
+        equippedSkills: ['void_touch', 'dark_ritual'],
         statusEffects: [],
         skillCastCount: {}
       },
@@ -129,7 +136,9 @@ describe('Class System', () => {
       useSkill: vi.fn().mockResolvedValue(undefined),
       switchPlayer: vi.fn(),
       makeAiMove: vi.fn().mockResolvedValue(undefined),
-      selectClass: vi.fn()
+      selectClass: vi.fn(),
+      updateTile: vi.fn(),
+      equipSkill: vi.fn()
     } as GameState;
   });
 
@@ -155,7 +164,7 @@ describe('Class System', () => {
       const state = createMockGameState();
       state.currentPlayer = 'human';
       state.human.className = 'pyromancer';
-      state.human.activeSkillIndex = 1;  // Set Fireball as active skill
+      state.human.activeSkillId = 1;  // Set Fireball as active skill
       
       // Add required mana for casting
       state.human.matchedColors.red = 4;
@@ -213,6 +222,17 @@ describe('Class System', () => {
       expect(state.ai.health).toBe(100);
       expect(state.processNewBoard).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalledWith('This skill can only target red tiles!');
+    });
+
+    it('Fireball should explode tiles in a radius and deal damage', async () => {
+      // Set up game state
+      state.currentPlayer = 'human';
+      state.human.className = 'pyromancer';
+      state.human.activeSkillId = 'fireball';  // Set Fireball as active skill
+      
+      // Add required mana for casting
+      state.human.matchedColors.red = 5;
+      state.human.matchedColors.yellow = 5;
     });
   });
 

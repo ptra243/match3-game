@@ -3,26 +3,37 @@ import { useGameStore } from '../store/gameStore';
 import { Color, Player } from '../store/types';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
 import { CLASSES } from '../store/classes';
+import { TileIcon } from './game-board/TileIcon';
+import { ALL_SKILLS } from '../store/skills';
+import { toast } from 'react-hot-toast';
 
 interface PlayerSidebarProps {
   player: Player;
   position: 'left' | 'right';
 }
 
+interface DamageTooltipProps {
+  color: Color;
+  isPrimary: boolean;
+}
+
+const DamageTooltip: React.FC<DamageTooltipProps> = ({ color, isPrimary }) => {
+  const damageText = isPrimary
+    ? "Primary Color: 3 damage for 3-match, 5 for 4-match, 8 for 5-match"
+    : "Secondary Color: 1 damage for 3-match, 2 for 4-match, 3 for 5-match";
+
+  return (
+    <div className="absolute invisible group-hover:visible bg-gray-900 text-white p-2 rounded-lg text-sm w-48 z-10">
+      {damageText}
+    </div>
+  );
+};
+
 export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }) => {
-  const { human, ai, currentPlayer, toggleSkill } = useGameStore();
+  const { human, ai, currentPlayer, toggleSkill, useSkill } = useGameStore();
   const playerState = player === 'human' ? human : ai;
   const isCurrentPlayer = currentPlayer === player;
   const characterClass = CLASSES[playerState.className];
-
-  const colorDisplayNames: Record<Color, string> = {
-    red: 'Red',
-    green: 'Green',
-    blue: 'Blue',
-    yellow: 'Yellow',
-    black: 'Black',
-    empty: '',
-  };
 
   const colorClasses: Record<Color, string> = {
     red: 'bg-red-500',
@@ -33,21 +44,42 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
     empty: 'bg-transparent',
   };
 
-  const handleSkillClick = (skillIndex: number) => {
+  const handleSkillClick = (skillId: string) => {
     if (isCurrentPlayer) {
-      toggleSkill(player, skillIndex);
+      const skill = ALL_SKILLS[skillId];
+      if (!skill) return;
+
+      // First check if we have enough resources
+      if (!isSkillReady(skillId)) {
+        toast.error('Not enough resources for this skill!');
+        return;
+      }
+
+      // Toggle the skill regardless of whether it's targeted or not
+      console.log('Toggling skill:', skillId);
+      toggleSkill(player, skillId);
+      
+      // If it's a non-targeted skill, use it immediately
+      if (!skill.targetColor && !skill.requiresTarget) {
+        console.log('Using non-targeted skill:', skillId);
+        useSkill(0, 0);
+      }
     }
   };
 
-  const isSkillReady = (skillIndex: number) => {
-    const skill = characterClass.skills[skillIndex];
-    let ready = true;
+  const isSkillReady = (skillId: string) => {
+    const skill = ALL_SKILLS[skillId];
+    if (!skill) return false;
+    
+    let isReady = true;
     Object.entries(skill.cost).forEach(([color, cost]) => {
-      if (playerState.matchedColors[color as Color] < cost) {
-        ready = false;
+      const castCount = playerState.skillCastCount[skillId] || 0;
+      const actualCost = skill.id === 'fertile_ground' ? (cost || 0) + castCount : (cost || 0);
+      if (playerState.matchedColors[color as Color] < actualCost) {
+        isReady = false;
       }
     });
-    return ready;
+    return isReady;
   };
 
   return (
@@ -59,6 +91,25 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
           {isCurrentPlayer && (
             <span className="text-sm text-green-400">Current Turn</span>
           )}
+        </div>
+      </div>
+
+      {/* Class Colors */}
+      <div className="mb-4">
+        <h3 className="text-gray-300 mb-2">Class Colors</h3>
+        <div className="flex space-x-4">
+          <div className="group relative">
+            <div className={`w-8 h-8 rounded-lg ${colorClasses[characterClass.primaryColor]} flex items-center justify-center`}>
+              <TileIcon color={characterClass.primaryColor} />
+            </div>
+            <DamageTooltip color={characterClass.primaryColor} isPrimary={true} />
+          </div>
+          <div className="group relative">
+            <div className={`w-8 h-8 rounded-lg ${colorClasses[characterClass.secondaryColor]} flex items-center justify-center`}>
+              <TileIcon color={characterClass.secondaryColor} />
+            </div>
+            <DamageTooltip color={characterClass.secondaryColor} isPrimary={false} />
+          </div>
         </div>
       </div>
 
@@ -83,7 +134,9 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
           {Object.entries(playerState.matchedColors).map(([color, count]) => (
             color !== 'empty' && (
               <div key={color} className="flex items-center">
-                <div className={`w-4 h-4 rounded ${colorClasses[color as Color]}`} />
+                <div className={`w-8 h-8 rounded-lg ${colorClasses[color as Color]} flex items-center justify-center`}>
+                  <TileIcon color={color as Color} />
+                </div>
                 <span className="ml-2 text-gray-300">
                   {count}
                 </span>
@@ -97,52 +150,70 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
       <div>
         <h3 className="text-gray-300 mb-2">Skills</h3>
         <div className="space-y-2">
-          {characterClass.skills.map((skill, index) => (
-            <button
-              key={skill.name}
-              onClick={() => handleSkillClick(index)}
-              disabled={!isCurrentPlayer || !isSkillReady(index)}
-              className={`w-full p-3 rounded-lg transition-colors duration-200 text-left
-                ${isCurrentPlayer && isSkillReady(index)
-                  ? playerState.activeSkillIndex === index
-                    ? 'bg-yellow-600 hover:bg-yellow-700'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                  : 'bg-gray-700'} 
-                ${!isCurrentPlayer || !isSkillReady(index) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-            >
-              <h4 className="font-medium text-white">{skill.name}</h4>
-              <p className="text-sm text-gray-300">{skill.description}</p>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {Object.entries(skill.cost).map(([color, cost]) => (
-                  <span key={color} className="text-xs flex items-center">
-                    <div className={`w-2 h-2 rounded ${colorClasses[color as Color]} mr-1`} />
-                    {cost}
-                  </span>
-                ))}
-              </div>
-            </button>
-          ))}
+          {playerState.equippedSkills.map((skillId) => {
+            const skill = ALL_SKILLS[skillId];
+            if (!skill) return null;
+            
+            return (
+              <button
+                key={skill.id}
+                onClick={() => handleSkillClick(skill.id)}
+                disabled={!isCurrentPlayer || !isSkillReady(skill.id)}
+                className={`w-full p-3 rounded-lg transition-colors duration-200 text-left
+                  ${isCurrentPlayer && isSkillReady(skill.id)
+                    ? playerState.activeSkillId === skill.id
+                      ? 'bg-yellow-600 hover:bg-yellow-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-gray-700'} 
+                  ${!isCurrentPlayer || !isSkillReady(skill.id) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+              >
+                <h4 className="font-medium text-white">{skill.name}</h4>
+                <p className="text-xs text-gray-300">{skill.description}</p>
+                <div className="flex mt-2 space-x-1">
+                  {Object.entries(skill.cost).map(([color, cost]) => {
+                    const castCount = playerState.skillCastCount[skill.id] || 0;
+                    const actualCost = skill.id === 'fertile_ground' ? (cost || 0) + castCount : (cost || 0);
+                    return (
+                      <div 
+                        key={color} 
+                        className={`${colorClasses[color as Color]} px-2 py-1 rounded text-xs text-white flex items-center`}
+                      >
+                        <span>{actualCost}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Status Effects */}
-      {playerState.statusEffects.length > 0 && (
-        <div className="mt-4">
-          <h3 className="text-gray-300 mb-2">Status Effects</h3>
-          <div className="space-y-2">
-            {playerState.statusEffects.map((effect, index) => (
-              <div key={index} className="text-sm text-gray-300">
-                {effect.damageMultiplier !== 1 && (
-                  <p>Damage x{effect.damageMultiplier} ({effect.turnsRemaining} turns)</p>
-                )}
-                {effect.resourceMultiplier !== 1 && (
-                  <p>Resources x{effect.resourceMultiplier} ({effect.turnsRemaining} turns)</p>
-                )}
-              </div>
-            ))}
-          </div>
+      <div className="mt-4">
+        <h3 className="text-gray-300 mb-2">Status Effects</h3>
+        <div className="space-y-2">
+          {playerState.statusEffects.map((effect, index) => (
+            <div key={index} className="text-sm text-gray-300">
+              {effect.damageMultiplier !== 1 && (
+                <p>Damage x{effect.damageMultiplier} ({effect.turnsRemaining} turns)</p>
+              )}
+              {effect.resourceMultiplier !== 1 && (
+                <p>Resources x{effect.resourceMultiplier} ({effect.turnsRemaining} turns)</p>
+              )}
+              {effect.manaConversion && (
+                <p>Converting {effect.manaConversion.from} to {effect.manaConversion.to} ({effect.turnsRemaining} turns)</p>
+              )}
+              {effect.convertTiles && (
+                <p>Converting {effect.convertTiles.count} tiles to {effect.convertTiles.color} next match</p>
+              )}
+              {effect.extraTurn && (
+                <p>Extra turn next round!</p>
+              )}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }; 

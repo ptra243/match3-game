@@ -4,6 +4,7 @@ import { useGameStore } from '../../store/gameStore';
 import { Tile } from '../../store/types';
 import { TileIcon } from './TileIcon';
 import { CLASSES } from '../../store/classes';
+import { ALL_SKILLS } from '../../store/skills';
 
 interface GameTileProps {
   tile: Tile;
@@ -31,31 +32,77 @@ export const GameTile: React.FC<GameTileProps> = ({
   isAiSelected, 
   onAnimationEnd 
 }) => {
-  const { currentPlayer, selectedTile, human, selectTile, useSkill } = useGameStore();
+  const { currentPlayer, selectedTile, human, selectTile, useSkill, updateTile } = useGameStore();
   const characterClass = CLASSES[human.className];
-  const activeSkill = human.activeSkillIndex !== null ? characterClass.skills[human.activeSkillIndex] : null;
+  const activeSkill = human.activeSkillId !== null ? ALL_SKILLS[human.activeSkillId] : null;
   const isSkillActive = currentPlayer === 'human' && activeSkill !== null;
   const canTargetWithSkill = isSkillActive && (!activeSkill.targetColor || tile.color === activeSkill.targetColor);
   const isSelected = selectedTile?.row === row && selectedTile?.col === col;
   const isHumanTurn = currentPlayer === 'human';
 
+  // Track which animation is currently playing
+  const [currentAnimation, setCurrentAnimation] = React.useState<'explode' | 'fallIn' | null>(
+    tile.isMatched ? 'explode' : (tile.isAnimating ? 'fallIn' : null)
+  );
+
+  // Update animation state when tile props change
+  React.useEffect(() => {
+    if (tile.isMatched) {
+      setCurrentAnimation('explode');
+    } else if (tile.isAnimating && !tile.isMatched) {
+      setCurrentAnimation('fallIn');
+    }
+  }, [tile.isMatched, tile.isAnimating]);
+
+  const handleAnimationEnd = (e: React.AnimationEvent) => {
+    console.log(`Animation ended for tile [${row},${col}]: ${e.animationName}`, {
+      currentAnimation,
+      tileState: tile
+    });
+    
+    if (e.animationName === 'explode') {
+      // Update the tile to be empty and ready for falling
+      updateTile(row, col, {
+        color: 'empty',
+        isMatched: false,
+        isNew: false,
+        isAnimating: true // Keep animating for the fall animation
+      });
+      setCurrentAnimation('fallIn');
+    } else if (e.animationName === 'fallIn') {
+      // Only clear animation state after fall is complete
+      updateTile(row, col, {
+        ...tile,
+        isAnimating: false
+      });
+      setCurrentAnimation(null);
+    }
+    
+    onAnimationEnd?.(e);
+  };
+
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `${row}-${col}`,
     data: { row, col },
-    disabled: !isHumanTurn || (isSkillActive && !canTargetWithSkill) || tile.isAnimating,
+    disabled: !isHumanTurn || tile.isFrozen || (isSkillActive && !canTargetWithSkill) || currentAnimation !== null,
   });
 
   const { setNodeRef: setDropRef } = useDroppable({
     id: `${row}-${col}`,
     data: { row, col },
-    disabled: !isHumanTurn || (isSkillActive && !canTargetWithSkill) || tile.isAnimating,
+    disabled: !isHumanTurn || (isSkillActive && !canTargetWithSkill) || currentAnimation !== null,
   });
 
   const handleClick = () => {
     if (!isHumanTurn) return;
-    if (isSkillActive && canTargetWithSkill) {
-      selectTile(row, col);
-      useSkill(row, col);
+    if (isSkillActive) {
+      if (!activeSkill) return;
+      
+      // For non-targeted skills, we can use any tile
+      if (!activeSkill.targetColor || tile.color === activeSkill.targetColor) {
+        selectTile(row, col);
+        useSkill(row, col);
+      }
     }
   };
 
@@ -68,21 +115,40 @@ export const GameTile: React.FC<GameTileProps> = ({
       onClick={handleClick}
       {...attributes}
       {...listeners}
-      className={`w-full h-full rounded-lg ${colorClasses[tile.color]} 
-        flex items-center justify-center ${!isHumanTurn ? 'cursor-not-allowed' : (!isSkillActive || (isSkillActive && canTargetWithSkill) ? 'cursor-move' : 'cursor-not-allowed')} shadow-md 
+      className={`relative w-full h-full rounded-lg ${colorClasses[tile.color]} 
+        flex items-center justify-center 
+        ${!isHumanTurn || (tile.isFrozen && !isSkillActive) ? 'cursor-not-allowed' : (!isSkillActive || (isSkillActive && canTargetWithSkill) ? 'cursor-move' : 'cursor-not-allowed')} 
+        shadow-md 
         hover:shadow-lg
         ${isDragging ? 'opacity-50 scale-105' : 'opacity-100 scale-100'}
         ${isAiSelected ? 'ring-4 ring-white ring-opacity-50 animate-pulse' : ''}
-        ${tile.isMatched ? 'ring-4 ring-white ring-opacity-75 animate-[explode_0.5s_ease-out]' : ''}
+        ${currentAnimation === 'explode' ? 'ring-4 ring-white ring-opacity-75 animate-[explode_0.3s_ease-out]' : ''}
         ${isSelected ? 'ring-4 ring-yellow-400 ring-opacity-75' : ''}
-        ${tile.color === 'empty' ? 'pointer-events-none' : ''}
+        ${tile.color === 'empty' && !tile.isAnimating ? 'opacity-0' : ''}
         ${isSkillActive && canTargetWithSkill && isHumanTurn ? 'cursor-pointer hover:ring-4 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
-        ${tile.isAnimating ? 'animate-[fallIn_0.5s_ease-in-out]' : ''}
-        ${tile.isFrozen ? 'ring-2 ring-blue-200 ring-opacity-75' : ''}
-        transition-all duration-500`}
-      onAnimationEnd={onAnimationEnd}
+        ${currentAnimation === 'fallIn' ? 'animate-[fallIn_0.3s_ease-in-out]' : ''}
+        transition-all duration-300`}
+      onAnimationEnd={handleAnimationEnd}
     >
       <TileIcon color={tile.color} />
+      
+      {/* Frozen overlay */}
+      {tile.isFrozen && (
+        <div className="absolute inset-0 bg-blue-500 bg-opacity-30 rounded-lg">
+          <div className="absolute top-0 right-0 p-1">
+            <i className="ra ra-snowflake text-blue-200 text-lg" />
+          </div>
+        </div>
+      )}
+
+      {/* Ignited overlay */}
+      {tile.isIgnited && (
+        <div className="absolute inset-0 bg-red-500 bg-opacity-30 rounded-lg">
+          <div className="absolute top-0 right-0 p-1">
+            <i className="ra ra-flame text-red-200 text-lg" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }; 

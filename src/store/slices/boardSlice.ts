@@ -4,8 +4,6 @@ import { GameState, Tile, Color } from '../types';
 export interface BoardSlice {
   board: Tile[][];
   initializeBoard: () => void;
-  dropTiles: () => void;
-  fillEmptyTiles: () => void;
 }
 
 const BOARD_SIZE = 8;
@@ -16,6 +14,8 @@ const createEmptyTile = (): Tile => ({
   isMatched: false,
   isNew: false,
   isAnimating: false,
+  isFrozen: false,
+  isIgnited: false
 });
 
 const createRandomTile = (avoidColors: Color[] = []): Tile => {
@@ -25,6 +25,8 @@ const createRandomTile = (avoidColors: Color[] = []): Tile => {
     isMatched: false,
     isNew: true,
     isAnimating: false,
+    isFrozen: false,
+    isIgnited: false
   };
 };
 
@@ -34,6 +36,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
   ),
 
   initializeBoard: () => {
+    console.log('BoardSlice - Initializing board');
     const newBoard = Array(BOARD_SIZE).fill(null).map(() =>
       Array(BOARD_SIZE).fill(null).map(() => createEmptyTile())
     );
@@ -61,60 +64,11 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       }
     }
 
-    set({ board: newBoard });
-  },
-
-  dropTiles: () => {
-    const board = get().board;
-    const newBoard = board.map(row => [...row]);
-
-    // Drop tiles down
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      let emptySpaces = 0;
-      for (let row = BOARD_SIZE - 1; row >= 0; row--) {
-        if (newBoard[row][col].color === 'empty') {
-          emptySpaces++;
-        } else if (emptySpaces > 0) {
-          // Move tile down and mark it as animating
-          newBoard[row + emptySpaces][col] = {
-            ...newBoard[row][col],
-            isAnimating: true,
-            isNew: false,
-            isMatched: false
-          };
-          // Clear original position
-          newBoard[row][col] = createEmptyTile();
-        }
-      }
-    }
-
-    set({ board: newBoard });
-  },
-
-  fillEmptyTiles: () => {
-    const board = get().board;
-    const newBoard = board.map(row => [...row]);
-
-    for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE; col++) {
-        if (newBoard[row][col].color === 'empty') {
-          // Create new tile with animation
-          newBoard[row][col] = {
-            ...createRandomTile(),
-            isAnimating: true,
-            isNew: true,
-            isMatched: false
-          };
-        } else {
-          // Reset animation flags for existing tiles
-          newBoard[row][col] = {
-            ...newBoard[row][col],
-            isAnimating: false,
-            isNew: false
-          };
-        }
-      }
-    }
+    console.log('BoardSlice - Board initialized with:', {
+      emptyTiles: newBoard.flat().filter(t => t.color === 'empty').length,
+      nonEmptyTiles: newBoard.flat().filter(t => t.color !== 'empty').length,
+      totalTiles: newBoard.flat().length
+    });
 
     set({ board: newBoard });
   },

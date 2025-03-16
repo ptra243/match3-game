@@ -13,8 +13,24 @@ import { GameBoardGrid } from './GameBoardGrid';
 import { GameTile } from './GameTile';
 
 export const GameBoard: React.FC = () => {
-  const { board, swapTiles, checkMatches } = useGameStore();
+  const { board, swapTiles, checkMatches, initializeBoard } = useGameStore();
   const [activeTile, setActiveTile] = React.useState<{ row: number; col: number } | null>(null);
+
+  // Check if board is initialized
+  React.useEffect(() => {
+    const nonEmptyTiles = board.flat().filter(tile => tile.color !== 'empty').length;
+    console.log('GameBoard - Board state check:', {
+      totalTiles: board.flat().length,
+      nonEmptyTiles,
+      isEmpty: nonEmptyTiles === 0
+    });
+    
+    // If board is empty, initialize it
+    if (nonEmptyTiles === 0) {
+      console.log('GameBoard - Board is empty, initializing');
+      initializeBoard();
+    }
+  }, [board, initializeBoard]);
 
   const mouseSensor = useSensor(MouseSensor, {
     activationConstraint: {

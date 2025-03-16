@@ -6,14 +6,16 @@ export interface Tile {
   isMatched: boolean;
   isNew: boolean;
   isAnimating: boolean;
-  isFrozen?: boolean;  // For Cryomancer effects
+  isFrozen: boolean;
+  isIgnited: boolean;
 }
 
 export interface PlayerState {
   health: number;
   matchedColors: Record<Color, number>;
   className: string;  // Key into CLASSES
-  activeSkillIndex: number | null;  // Index of the currently selected skill
+  activeSkillId: string | null;  // ID of the currently selected skill
+  equippedSkills: string[];  // List of equipped skill IDs
   statusEffects: {
     damageMultiplier: number;
     resourceMultiplier: number;
@@ -28,8 +30,13 @@ export interface PlayerState {
       color: Color;
       count: number;  // Number of tiles to convert after match
     };
+    resourceBonus?: {
+      matchColor: Color;  // When this color is matched
+      bonusColor: Color;  // Gain this color as bonus
+      bonusAmount: number;  // Amount to gain per match
+    };
   }[];
-  skillCastCount: Record<number, number>;  // Track how many times each skill index has been cast
+  skillCastCount: Record<string, number>;  // Track how many times each skill has been cast
 }
 
 export interface GameState {
@@ -52,6 +59,7 @@ export interface GameState {
   dropTiles: () => void;
   fillEmptyTiles: () => void;
   processNewBoard: (newBoard: Tile[][]) => Promise<void>;  // New method for handling cascading matches
+  updateTile: (row: number, col: number, tile: Partial<Tile>) => void;  // New method for updating a single tile
 
   // Match methods
   checkMatches: () => Promise<boolean>;
@@ -61,11 +69,28 @@ export interface GameState {
   // Player methods
   selectTile: (row: number, col: number) => void;
   checkSkillReadiness: (player: Player) => void;
-  toggleSkill: (player: Player, skillIndex: number) => void;
+  toggleSkill: (player: Player, skillId: string) => void;
   useSkill: (row: number, col: number) => Promise<void>;
   switchPlayer: () => void;
   makeAiMove: () => Promise<void>;
   
   // Class methods
   selectClass: (player: Player, className: string) => void;
+  equipSkill: (player: Player, skillId: string, slotIndex: number) => void;
+}
+
+export interface GameStore extends GameState {
+  set: (state: Partial<GameState>) => void;
+}
+
+export interface ClassSkill {
+  id: string;
+  name: string;
+  description: string;
+  cost: Partial<Record<Color, number>>;
+  primaryColor: Color;
+  secondaryColor: Color;
+  targetColor?: Color;
+  requiresTarget?: boolean;
+  effect: (state: GameState, row?: number, col?: number) => Promise<void>;
 } 

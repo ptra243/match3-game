@@ -4,49 +4,341 @@ import { toast } from 'react-hot-toast';
 import { CLASSES } from '../classes';
 
 export interface MatchSlice {
+  board: Tile[][];
   currentMatchSequence: number;
   currentCombo: number;
+  animationInProgress: boolean;
+  signalAnimationComplete: () => void;
+  waitForAnimation: () => Promise<void>;
+  dropTiles: () => void;
+  fillEmptyTiles: () => void;
+  processNewBoard: (newBoard: Tile[][]) => Promise<void>;
   checkMatches: () => Promise<boolean>;
   swapTiles: (row1: number, col1: number, row2: number, col2: number) => Promise<boolean>;
   wouldCreateMatch: (row1: number, col1: number, row2: number, col2: number) => boolean;
-  waitForAnimation: () => Promise<void>;
-  processNewBoard: (newBoard: Tile[][]) => Promise<void>;
+  updateTile: (row: number, col: number, tile: Partial<Tile>) => void;
 }
 
 const BOARD_SIZE = 8;
 
+// Define the Match type locally if it's not exported from types.ts
+interface Match {
+  color: Color;
+  tiles: { row: number; col: number }[];
+}
+
+const findMatches = (board: Tile[][]): Match[] => {
+  const matches: Match[] = [];
+  const BOARD_SIZE = board.length;
+
+  // Helper function to add a match
+  const addMatch = (tiles: { row: number; col: number }[], color: Color) => {
+    matches.push({ color, tiles });
+  };
+
+  // Check T and L shapes
+  for (let row = 0; row < BOARD_SIZE - 2; row++) {
+    for (let col = 0; col < BOARD_SIZE - 2; col++) {
+      const color = board[row][col].color;
+      if (color === 'empty') continue;
+
+      // Check T shape (facing down)
+      if (row < BOARD_SIZE - 2 && col < BOARD_SIZE - 2 &&
+          color === board[row][col + 1].color &&
+          color === board[row][col + 2].color &&
+          color === board[row + 1][col + 1].color &&
+          color === board[row + 2][col + 1].color) {
+        addMatch([
+          {row, col}, {row, col: col + 1}, {row, col: col + 2},
+          {row: row + 1, col: col + 1}, {row: row + 2, col: col + 1}
+        ], color);
+        continue;
+      }
+
+      // Check T shape (facing up)
+      if (row >= 2 && col < BOARD_SIZE - 2 &&
+          color === board[row][col + 1].color &&
+          color === board[row][col + 2].color &&
+          color === board[row - 1][col + 1].color &&
+          color === board[row - 2][col + 1].color) {
+        addMatch([
+          {row, col}, {row, col: col + 1}, {row, col: col + 2},
+          {row: row - 1, col: col + 1}, {row: row - 2, col: col + 1}
+        ], color);
+        continue;
+      }
+
+      // Check T shape (facing right)
+      if (row < BOARD_SIZE - 2 && col < BOARD_SIZE - 1 &&
+          color === board[row + 1][col].color &&
+          color === board[row + 2][col].color &&
+          color === board[row + 1][col + 1].color) {
+        addMatch([
+          {row, col}, {row: row + 1, col}, {row: row + 2, col},
+          {row: row + 1, col: col + 1}
+        ], color);
+        continue;
+      }
+
+      // Check T shape (facing left)
+      if (row < BOARD_SIZE - 2 && col > 0 &&
+          color === board[row + 1][col].color &&
+          color === board[row + 2][col].color &&
+          color === board[row + 1][col - 1].color) {
+        addMatch([
+          {row, col}, {row: row + 1, col}, {row: row + 2, col},
+          {row: row + 1, col: col - 1}
+        ], color);
+        continue;
+      }
+
+      // Check L shape (bottom right)
+      if (row < BOARD_SIZE - 2 && col < BOARD_SIZE - 2 &&
+          color === board[row + 1][col].color &&
+          color === board[row + 2][col].color &&
+          color === board[row + 2][col + 1].color &&
+          color === board[row + 2][col + 2].color) {
+        addMatch([
+          {row, col}, {row: row + 1, col}, {row: row + 2, col},
+          {row: row + 2, col: col + 1}, {row: row + 2, col: col + 2}
+        ], color);
+        continue;
+      }
+
+      // Check L shape (bottom left)
+      if (row < BOARD_SIZE - 2 && col >= 2 &&
+          color === board[row + 1][col].color &&
+          color === board[row + 2][col].color &&
+          color === board[row + 2][col - 1].color &&
+          color === board[row + 2][col - 2].color) {
+        addMatch([
+          {row, col}, {row: row + 1, col}, {row: row + 2, col},
+          {row: row + 2, col: col - 1}, {row: row + 2, col: col - 2}
+        ], color);
+        continue;
+      }
+
+      // Check L shape (top right)
+      if (row >= 2 && col < BOARD_SIZE - 2 &&
+          color === board[row - 1][col].color &&
+          color === board[row - 2][col].color &&
+          color === board[row][col + 1].color &&
+          color === board[row][col + 2].color) {
+        addMatch([
+          {row, col}, {row: row - 1, col}, {row: row - 2, col},
+          {row, col: col + 1}, {row, col: col + 2}
+        ], color);
+        continue;
+      }
+
+      // Check L shape (top left)
+      if (row >= 2 && col >= 2 &&
+          color === board[row - 1][col].color &&
+          color === board[row - 2][col].color &&
+          color === board[row][col - 1].color &&
+          color === board[row][col - 2].color) {
+        addMatch([
+          {row, col}, {row: row - 1, col}, {row: row - 2, col},
+          {row, col: col - 1}, {row, col: col - 2}
+        ], color);
+        continue;
+      }
+    }
+  }
+
+  // Check regular horizontal matches (3 in a row)
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE - 2; col++) {
+      const color = board[row][col].color;
+      if (
+        color !== 'empty' &&
+        color === board[row][col + 1].color &&
+        color === board[row][col + 2].color
+      ) {
+        addMatch([
+          {row, col}, {row, col: col + 1}, {row, col: col + 2}
+        ], color);
+      }
+    }
+  }
+
+  // Check regular vertical matches (3 in a row)
+  for (let col = 0; col < BOARD_SIZE; col++) {
+    for (let row = 0; row < BOARD_SIZE - 2; row++) {
+      const color = board[row][col].color;
+      if (
+        color !== 'empty' &&
+        color === board[row + 1][col].color &&
+        color === board[row + 2][col].color
+      ) {
+        addMatch([
+          {row, col}, {row: row + 1, col}, {row: row + 2, col}
+        ], color);
+      }
+    }
+  }
+
+  return matches;
+};
+
 export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (set, get) => ({
+  board: [],
   currentMatchSequence: 0,
   currentCombo: 0,
-
-  // Helper function to wait for animations
+  animationInProgress: false,
+  signalAnimationComplete: () => {},
   waitForAnimation: () => {
+    console.log('Waiting for animation. Current state:', {
+      animationInProgress: get().animationInProgress,
+      animatingTiles: get().board.reduce((count, row) => 
+        count + row.reduce((rowCount, tile) => 
+          rowCount + (tile.isAnimating ? 1 : 0), 0), 0)
+    });
+    
+    // If there are no animating tiles, resolve immediately
+    const animatingTiles = get().board.reduce((count, row) => 
+      count + row.reduce((rowCount, tile) => 
+        rowCount + (tile.isAnimating ? 1 : 0), 0), 0);
+        
+    if (animatingTiles === 0) {
+      console.log('No animating tiles, resolving immediately');
+      return Promise.resolve();
+    }
+    
     return new Promise<void>(resolve => {
       set({ animationInProgress: true });
       get().signalAnimationComplete = () => {
+        console.log('Animation complete signal received');
         set({ animationInProgress: false });
         resolve();
       };
     });
   },
+  dropTiles: async () => {
+    console.log('dropTiles called');
+    const board = get().board;
+    const newBoard = board.map(row => [...row]);
+    let hasDropped = false;
 
-  // New method to handle any board changes and check for cascading matches
+    // Process each column
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      // Find the lowest empty space
+      let emptyRow = BOARD_SIZE - 1;
+      let nextTileRow = BOARD_SIZE - 1;
+
+      // Keep going until we've processed all rows
+      while (emptyRow >= 0) {
+        // Find the next empty space
+        while (emptyRow >= 0 && (newBoard[emptyRow][col].color !== 'empty' || newBoard[emptyRow][col].isFrozen)) {
+          emptyRow--;
+        }
+
+        // If we found an empty space
+        if (emptyRow >= 0) {
+          // Find the next non-empty tile above it
+          nextTileRow = emptyRow - 1;
+          while (nextTileRow >= 0 && (newBoard[nextTileRow][col].color === 'empty' || newBoard[nextTileRow][col].isFrozen)) {
+            nextTileRow--;
+          }
+
+          // If we found a tile to drop
+          if (nextTileRow >= 0) {
+            console.log(`Moving tile from [${nextTileRow},${col}] to [${emptyRow},${col}]`);
+            newBoard[emptyRow][col] = {
+              ...newBoard[nextTileRow][col],
+              isAnimating: true
+            };
+            newBoard[nextTileRow][col] = {
+              color: 'empty' as Color,
+              isMatched: false,
+              isNew: false,
+              isAnimating: true,  // Mark empty tile as animating
+              isFrozen: false,
+              isIgnited: false
+            };
+            hasDropped = true;
+            // Don't decrement emptyRow since we might need to fill it again from above
+          } else {
+            // No more tiles to drop in this column
+            emptyRow--;
+          }
+        }
+      }
+    }
+
+    if (hasDropped) {
+      console.log('Setting new board after dropping tiles:', newBoard);
+      set({ board: newBoard });
+      await get().waitForAnimation();
+    } else {
+      console.log('No tiles needed to drop');
+    }
+  },
+  fillEmptyTiles: async () => {
+    console.log('fillEmptyTiles called');
+    const board = get().board;
+    const newBoard = board.map(row => [...row]);
+    const colors: Color[] = ['red', 'blue', 'green', 'yellow', 'black'];
+    let hasFilled = false;
+    let animatingTileCount = 0;
+
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        if (newBoard[row][col].color === 'empty') {
+          const randomColor = colors[Math.floor(Math.random() * colors.length)];
+          console.log(`Filling empty tile at [${row},${col}] with ${randomColor}`);
+          newBoard[row][col] = {
+            color: randomColor,
+            isMatched: false,
+            isNew: true,
+            isAnimating: true,
+            isFrozen: false,
+            isIgnited: false
+          };
+          animatingTileCount++;
+          hasFilled = true;
+        }
+      }
+    }
+
+    if (hasFilled) {
+      console.log('Setting new board after filling empty tiles:', {
+        filledTileCount: animatingTileCount,
+        board: newBoard
+      });
+      set({ board: newBoard });
+      await get().waitForAnimation();
+    } else {
+      console.log('No empty tiles to fill');
+    }
+  },
   processNewBoard: async (newBoard: Tile[][]) => {
+    console.log('processNewBoard called');
+    // Set the new board state and wait for any current animations
     set({ board: newBoard });
     await get().waitForAnimation();
     
     // Check for matches and continue cascading until no more matches are found
     let hasMoreMatches = true;
+    let iteration = 0;
     while (hasMoreMatches) {
+      console.log(`Processing iteration ${iteration++}`);
       hasMoreMatches = await get().checkMatches();
-      if (hasMoreMatches) {
-        await get().waitForAnimation();
+      
+      // Break the loop if no more matches to prevent infinite recursion
+      if (!hasMoreMatches) {
+        console.log('No more matches found');
+        break;
       }
     }
-  },
 
+    // Reset animation state at the end
+    console.log('Resetting animation state');
+    set({ animationInProgress: false });
+  },
   checkMatches: async () => {
-    const { currentPlayer, waitForAnimation } = get();
+    console.log('checkMatches called');
+    const { currentPlayer, waitForAnimation, dropTiles, fillEmptyTiles } = get();
     const board = get().board;
     const newBoard = board.map(row => [...row]);
     let hasMatches = false;
@@ -59,343 +351,167 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
       empty: 0,
     };
 
-    // Helper function to mark tiles as matched and update count
-    const markMatch = (tiles: { row: number; col: number }[], color: Color) => {
-      tiles.forEach(({row, col}) => {
-        if (!newBoard[row][col].isFrozen) {
-          newBoard[row][col] = {
-            ...newBoard[row][col],
-            isMatched: true,
-            isAnimating: true
-          };
-        }
-      });
-      // Count all tiles in match, even frozen ones
-      matchedColors[color] += tiles.length;
+    // Find all matches
+    const matches = findMatches(newBoard);
+    console.log('Found matches:', matches);
+    
+    if (matches.length > 0) {
       hasMatches = true;
-    };
-
-    // Check T and L shapes
-    for (let row = 0; row < BOARD_SIZE - 2; row++) {
-      for (let col = 0; col < BOARD_SIZE - 2; col++) {
-        const color = board[row][col].color;
-        if (color === 'empty') continue;
-
-        // Check T shape (facing down)
-        if (row < BOARD_SIZE - 2 && col < BOARD_SIZE - 2 &&
-            color === board[row][col + 1].color &&
-            color === board[row][col + 2].color &&
-            color === board[row + 1][col + 1].color &&
-            color === board[row + 2][col + 1].color) {
-          markMatch([
-            {row, col}, {row, col: col + 1}, {row, col: col + 2},
-            {row: row + 1, col: col + 1}, {row: row + 2, col: col + 1}
-          ], color);
-          continue;
-        }
-
-        // Check T shape (facing up)
-        if (row >= 2 && col < BOARD_SIZE - 2 &&
-            color === board[row][col + 1].color &&
-            color === board[row][col + 2].color &&
-            color === board[row - 1][col + 1].color &&
-            color === board[row - 2][col + 1].color) {
-          markMatch([
-            {row, col}, {row, col: col + 1}, {row, col: col + 2},
-            {row: row - 1, col: col + 1}, {row: row - 2, col: col + 1}
-          ], color);
-          continue;
-        }
-
-        // Check T shape (facing right)
-        if (row < BOARD_SIZE - 2 && col < BOARD_SIZE - 1 &&
-            color === board[row + 1][col].color &&
-            color === board[row + 2][col].color &&
-            color === board[row + 1][col + 1].color) {
-          markMatch([
-            {row, col}, {row: row + 1, col}, {row: row + 2, col},
-            {row: row + 1, col: col + 1}
-          ], color);
-          continue;
-        }
-
-        // Check T shape (facing left)
-        if (row < BOARD_SIZE - 2 && col > 0 &&
-            color === board[row + 1][col].color &&
-            color === board[row + 2][col].color &&
-            color === board[row + 1][col - 1].color) {
-          markMatch([
-            {row, col}, {row: row + 1, col}, {row: row + 2, col},
-            {row: row + 1, col: col - 1}
-          ], color);
-          continue;
-        }
-
-        // Check L shape (bottom right)
-        if (row < BOARD_SIZE - 2 && col < BOARD_SIZE - 2 &&
-            color === board[row + 1][col].color &&
-            color === board[row + 2][col].color &&
-            color === board[row + 2][col + 1].color &&
-            color === board[row + 2][col + 2].color) {
-          markMatch([
-            {row, col}, {row: row + 1, col}, {row: row + 2, col},
-            {row: row + 2, col: col + 1}, {row: row + 2, col: col + 2}
-          ], color);
-          continue;
-        }
-
-        // Check L shape (bottom left)
-        if (row < BOARD_SIZE - 2 && col >= 2 &&
-            color === board[row + 1][col].color &&
-            color === board[row + 2][col].color &&
-            color === board[row + 2][col - 1].color &&
-            color === board[row + 2][col - 2].color) {
-          markMatch([
-            {row, col}, {row: row + 1, col}, {row: row + 2, col},
-            {row: row + 2, col: col - 1}, {row: row + 2, col: col - 2}
-          ], color);
-          continue;
-        }
-
-        // Check L shape (top right)
-        if (row >= 2 && col < BOARD_SIZE - 2 &&
-            color === board[row - 1][col].color &&
-            color === board[row - 2][col].color &&
-            color === board[row][col + 1].color &&
-            color === board[row][col + 2].color) {
-          markMatch([
-            {row, col}, {row: row - 1, col}, {row: row - 2, col},
-            {row, col: col + 1}, {row, col: col + 2}
-          ], color);
-          continue;
-        }
-
-        // Check L shape (top left)
-        if (row >= 2 && col >= 2 &&
-            color === board[row - 1][col].color &&
-            color === board[row - 2][col].color &&
-            color === board[row][col - 1].color &&
-            color === board[row][col - 2].color) {
-          markMatch([
-            {row, col}, {row: row - 1, col}, {row: row - 2, col},
-            {row, col: col - 1}, {row, col: col - 2}
-          ], color);
-          continue;
-        }
-      }
-    }
-
-    // Check regular horizontal matches (3 in a row)
-    for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE - 2; col++) {
-        const color = board[row][col].color;
-        if (
-          color !== 'empty' &&
-          color === board[row][col + 1].color &&
-          color === board[row][col + 2].color &&
-          !newBoard[row][col].isMatched && // Check all three tiles aren't already matched
-          !newBoard[row][col + 1].isMatched &&
-          !newBoard[row][col + 2].isMatched
-        ) {
-          markMatch([
-            {row, col}, {row, col: col + 1}, {row, col: col + 2}
-          ], color);
-        }
-      }
-    }
-
-    // Check regular vertical matches (3 in a row)
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      for (let row = 0; row < BOARD_SIZE - 2; row++) {
-        const color = board[row][col].color;
-        if (
-          color !== 'empty' &&
-          color === board[row + 1][col].color &&
-          color === board[row + 2][col].color &&
-          !newBoard[row][col].isMatched && // Check all three tiles aren't already matched
-          !newBoard[row + 1][col].isMatched &&
-          !newBoard[row + 2][col].isMatched
-        ) {
-          markMatch([
-            {row, col}, {row: row + 1, col}, {row: row + 2, col}
-          ], color);
-        }
-      }
-    }
-
-    if (hasMatches) {
-      // Apply status effects to resource generation
-      const playerState = get()[currentPlayer];
-      const resourceMultiplier = playerState.statusEffects.reduce(
-        (mult, effect) => mult * effect.resourceMultiplier,
-        1
-      );
-
-      // Update matched colors with multiplier
-      Object.entries(matchedColors).forEach(([color, count]) => {
-        matchedColors[color as Color] = Math.floor(count * resourceMultiplier);
-      });
-
-      // Update opponent's health based on matches and damage multipliers
-      const opponent = currentPlayer === 'human' ? 'ai' : 'human';
-      const opponentState = get()[opponent];
-      const playerClass = CLASSES[playerState.className];
-
-      // Calculate class-based damage
-      let classDamage = 0;
-      Object.entries(matchedColors).forEach(([color, count]) => {
-        if (color === playerClass.primaryColor) {
-          // Primary color damage: 3 for 3-match, 5 for 4-match, 8 for 5-match
-          if (count >= 5) classDamage += 8;
-          else if (count >= 4) classDamage += 5;
-          else if (count >= 3) classDamage += 3;
-        } else if (color === playerClass.secondaryColor) {
-          // Secondary color damage: 1 for 3-match, 2 for 4-match, 3 for 5-match
-          if (count >= 5) classDamage += 3;
-          else if (count >= 4) classDamage += 2;
-          else if (count >= 3) classDamage += 1;
-        }
-      });
-
-      const baseDamage = Object.values(matchedColors).reduce((sum, count) => sum + count, 0) + classDamage;
-      const damageMultiplier = opponentState.statusEffects.reduce(
-        (mult, effect) => mult * effect.damageMultiplier,
-        1
-      );
       
-      set(state => ({
-        [opponent]: {
-          ...state[opponent],
-          health: Math.max(0, state[opponent].health - Math.floor(baseDamage * damageMultiplier))
-        }
-      }));
-
-      // Show damage toast if class damage was dealt
-      if (classDamage > 0) {
-        toast.success(`${playerClass.name} dealt ${classDamage} bonus damage!`);
-      }
-
-      // Update current player's matched colors and handle conversions
-      set(state => {
-        const currentPlayerState = state[currentPlayer];
-        const newMatchedColors = { ...currentPlayerState.matchedColors };
-        const newStatusEffects = [...currentPlayerState.statusEffects];
-
-        // First, add all matched colors with resource multiplier
-        Object.entries(matchedColors).forEach(([color, count]) => {
-          newMatchedColors[color as Color] += Math.floor(count * resourceMultiplier);
-          // Grant extra turn for matching 5 or more tiles
-          if (count >= 5) {
-            newStatusEffects.push({
-              damageMultiplier: 1,
-              resourceMultiplier: 1,
-              turnsRemaining: 1,
-              extraTurn: true
-            });
-            toast.success('Matched 5 tiles - Extra turn granted!');
+      // Create a Set to track tiles that have been matched to avoid duplicates
+      const matchedTiles = new Set<string>();
+      
+      matches.forEach((match: Match) => {
+        // Count matched colors (only once per unique tile)
+        match.tiles.forEach(({ row, col }) => {
+          const tileKey = `${row},${col}`;
+          if (!matchedTiles.has(tileKey)) {
+            matchedColors[match.color]++;
+            matchedTiles.add(tileKey);
+            
+            console.log(`Marking tile at [${row},${col}] as matched`);
+            newBoard[row][col] = {
+              ...newBoard[row][col],
+              isMatched: true,
+              isAnimating: true
+            };
           }
         });
-
-        // Handle mana conversion effects
-        currentPlayerState.statusEffects.forEach(effect => {
-          if (effect.manaConversion) {
-            const { from, to, ratio } = effect.manaConversion;
-            const convertibleAmount = Math.floor(matchedColors[from] / ratio);
-            if (convertibleAmount > 0) {
-              newMatchedColors[to] += convertibleAmount;
-              toast.success(`Converted ${convertibleAmount * ratio} ${from} mana into ${convertibleAmount} ${to} mana!`);
-            }
-          }
-        });
-
-        return {
-          [currentPlayer]: {
-            ...currentPlayerState,
-            matchedColors: newMatchedColors,
-            statusEffects: newStatusEffects
-          },
-          currentCombo: state.currentCombo + 1,
-          board: newBoard
-        };
       });
 
-      // Show combo toast if it's more than 1
-      const combo = get().currentCombo;
-      if (combo > 1) {
-        toast.success(`${combo}x Combo!`);
+      // Check for matches greater than 3 tiles and add extra turn status effect
+      const hasLongMatch = matches.some(match => match.tiles.length > 3);
+      if (hasLongMatch) {
+        const currentPlayerState = get()[currentPlayer];
+        // Check if player already has an extra turn effect
+        const hasExtraTurn = currentPlayerState.statusEffects.some(effect => effect.extraTurn);
+        if (!hasExtraTurn) {
+          set(state => ({
+            [currentPlayer]: {
+              ...state[currentPlayer],
+              statusEffects: [
+                ...currentPlayerState.statusEffects,
+                {
+                  damageMultiplier: 1,
+                  resourceMultiplier: 1, 
+                  turnsRemaining: 1,
+                  extraTurn: true
+                }
+              ]
+            }
+          }));
+          toast.success('Match of 4 or more - Extra turn granted!');
+        }
       }
-
-      // Wait for match animation to complete
-      await waitForAnimation();
-
-      // Clear matched tiles
+      // Add matches length to current combo
       set(state => ({
-        board: state.board.map(row =>
-          row.map(tile =>
-            tile.isMatched ? { ...tile, color: 'empty', isMatched: false, isAnimating: false } : tile
-          )
-        )
+        currentCombo: state.currentCombo + matches.length
       }));
 
-      // Drop tiles
-      get().dropTiles();
-      await waitForAnimation();
-
-      // Fill empty spaces
-      get().fillEmptyTiles();
-      await waitForAnimation();
-
-      // Handle tile conversion effects
+      // Update matched colors for the current player
       const currentPlayerState = get()[currentPlayer];
-      const newBoardAfterConversion = get().board.map(row => [...row]);
-      let needsProcessing = false;
-
-      currentPlayerState.statusEffects.forEach(effect => {
-        if (effect.convertTiles) {
-          const { color, count } = effect.convertTiles;
-          let converted = 0;
-          
-          // Find random non-empty tiles to convert
-          while (converted < count) {
-            const row = Math.floor(Math.random() * BOARD_SIZE);
-            const col = Math.floor(Math.random() * BOARD_SIZE);
-            if (newBoardAfterConversion[row][col].color !== 'empty' && 
-                newBoardAfterConversion[row][col].color !== color) {
-              newBoardAfterConversion[row][col] = {
-                ...newBoardAfterConversion[row][col],
-                color: color,
-                isAnimating: true
-              };
-              converted++;
-              needsProcessing = true;
-            }
-          }
-          
-          if (converted > 0) {
-            toast.success(`Converted ${converted} tiles to ${color}!`);
+      set(state => ({
+        [currentPlayer]: {
+          ...state[currentPlayer],
+          matchedColors: {
+            ...currentPlayerState.matchedColors,
+            red: currentPlayerState.matchedColors.red + matchedColors.red,
+            blue: currentPlayerState.matchedColors.blue + matchedColors.blue,
+            green: currentPlayerState.matchedColors.green + matchedColors.green,
+            yellow: currentPlayerState.matchedColors.yellow + matchedColors.yellow,
+            black: currentPlayerState.matchedColors.black + matchedColors.black,
           }
         }
+      }));
+
+      // Calculate damage based on matched tiles
+      let totalDamage = 0;
+      matches.forEach((match: Match) => {
+        // Base damage is 1 per tile
+        const baseDamage = match.tiles.length;
+        
+        // Bonus damage for longer matches
+        const lengthBonus = match.tiles.length > 3 ? (match.tiles.length - 3) * 2 : 0;
+        
+        // Color bonus for primary/secondary colors
+        const characterClass = CLASSES[get()[currentPlayer].className];
+        let colorMultiplier = 1;
+        if (match.color === characterClass.primaryColor) colorMultiplier = 2;
+        else if (match.color === characterClass.secondaryColor) colorMultiplier = 1.5;
+        
+        totalDamage += (baseDamage + lengthBonus) * colorMultiplier;
       });
 
-      if (needsProcessing) {
-        await get().processNewBoard(newBoardAfterConversion);
-      } else {
-        // If this is the end of all cascading matches, switch turns
-        const finalCombo = get().currentCombo;
-        if (finalCombo > 1) {
-          toast.success(`Match complete! ${finalCombo}x combo!`);
-        }
-        set({ currentCombo: 0 });
-        get().switchPlayer();
-      }
+      // Get damage multipliers from status effects
+      const currentPlayerEffects = get()[currentPlayer].statusEffects;
+      const opponent = currentPlayer === 'human' ? 'ai' : 'human';
+      const opponentEffects = get()[opponent].statusEffects;
       
+      const playerDamageMultiplier = currentPlayerEffects.reduce(
+        (multiplier, effect) => multiplier * effect.damageMultiplier, 
+        1
+      );
+      
+      const opponentDamageMultiplier = opponentEffects.reduce(
+        (multiplier, effect) => multiplier * effect.damageMultiplier, 
+        1
+      );
+      
+      // Apply both multipliers
+      totalDamage = Math.round(totalDamage * playerDamageMultiplier * opponentDamageMultiplier);
+      
+      if (totalDamage > 0) {
+        console.log(`Dealing ${totalDamage} damage to ${opponent} (multipliers: player ${playerDamageMultiplier}, opponent ${opponentDamageMultiplier})`);
+        
+        // Update opponent's health
+        set(state => ({
+          [opponent]: {
+            ...state[opponent],
+            health: Math.max(0, state[opponent].health - totalDamage)
+          }
+        }));
+        
+        // Show damage toast
+        toast.success(`Dealt ${totalDamage} damage to opponent!`);
+      }
+
+      // Set the board with matched tiles and wait for animation
+      console.log('Setting board with matched tiles');
+      set({ board: newBoard });
+      
+      // Wait for the explode animation to complete
+      await waitForAnimation();
+
+      // Clear matched tiles but keep them animating for the fall
+      console.log('Clearing matched tiles');
+      const clearedBoard = newBoard.map(row =>
+        row.map(tile =>
+          tile.isMatched ? {
+            color: 'empty' as Color,
+            isMatched: false,
+            isNew: false,
+            isAnimating: true,  // Keep animating for the fall
+            isFrozen: false,
+            isIgnited: false
+          } : tile
+        )
+      );
+      
+      // Set the board with cleared tiles
+      set({ board: clearedBoard });
+      
+      // Immediately drop tiles to fill the gaps
+      await dropTiles();
+      
+      // Immediately fill empty tiles
+      await fillEmptyTiles();
+      
+      // Process any new matches that might have formed
       return true;
     }
 
-    set({ currentCombo: 0 });
     return false;
   },
-
   swapTiles: async (row1: number, col1: number, row2: number, col2: number) => {
     if (!get().wouldCreateMatch(row1, col1, row2, col2)) {
       return false;
@@ -407,11 +523,18 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
     newBoard[row1][col1] = { ...newBoard[row2][col2], isAnimating: true };
     newBoard[row2][col2] = { ...temp, isAnimating: true };
 
-    // Use processNewBoard to handle cascading matches
+    // Process matches and wait for all cascading to complete
     await get().processNewBoard(newBoard);
+
+    // Switch turns if no extra turn was granted
+    const currentPlayer = get().currentPlayer;
+    const hasExtraTurn = get()[currentPlayer].statusEffects.some(effect => effect.extraTurn);
+    if (!hasExtraTurn) {
+      get().switchPlayer();
+    }
+
     return true;
   },
-
   wouldCreateMatch: (row1: number, col1: number, row2: number, col2: number): boolean => {
     const board = get().board;
     const tempBoard = board.map(row => [...row]);
@@ -526,5 +649,14 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
     }
 
     return false;
+  },
+  updateTile: (row: number, col: number, tile: Partial<Tile>) => {
+    const board = get().board;
+    const newBoard = board.map(r => [...r]);
+    newBoard[row][col] = {
+      ...newBoard[row][col],
+      ...tile
+    };
+    set({ board: newBoard });
   },
 }); 
