@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="100" fill="#1F2937"/>
+  <g transform="translate(64, 64) scale(0.75)">
+    <!-- Red Gem -->
+    <polygon points="128,64 192,128 128,192 64,128" fill="#EF4444"/>
+    <!-- Green Gem -->
+    <polygon points="320,64 384,128 320,192 256,128" fill="#10B981"/>
+    <!-- Blue Gem -->
+    <polygon points="128,256 192,320 128,384 64,320" fill="#3B82F6"/>
+    <!-- Yellow Gem -->
+    <polygon points="320,256 384,320 320,384 256,320" fill="#F59E0B"/>
+  </g>
+</svg> 
