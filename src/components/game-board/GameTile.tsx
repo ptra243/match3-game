@@ -5,6 +5,8 @@ import { Tile } from '../../store/types';
 import { TileIcon } from './TileIcon';
 import { CLASSES } from '../../store/classes';
 import { ALL_SKILLS } from '../../store/skills';
+import { toast } from 'react-hot-toast';
+import { debugLog } from '../../store/slices/debug';
 
 interface GameTileProps {
   tile: Tile;
@@ -41,26 +43,69 @@ export const GameTile: React.FC<GameTileProps> = ({
   const isHumanTurn = currentPlayer === 'human';
 
   // Track which animation is currently playing
-  const [currentAnimation, setCurrentAnimation] = React.useState<'explode' | 'fallIn' | null>(
-    tile.isMatched ? 'explode' : (tile.isAnimating ? 'fallIn' : null)
-  );
+  const [currentAnimation, setCurrentAnimation] = React.useState<'explode' | 'fallIn' | null>(null);
+  const animationStateRef = React.useRef({ isProcessing: false });
+
+  // Log initial state for selected tile
+  React.useEffect(() => {
+    if (isSelected) {
+      debugLog('GAME_TILE', `Selected tile [${row},${col}] state:`, {
+        tile,
+        isMatched: tile.isMatched,
+        isAnimating: tile.isAnimating,
+        currentAnimation,
+        isSelected,
+        isSkillActive
+      });
+    }
+  }, [isSelected, tile, row, col, currentAnimation, isSkillActive]);
 
   // Update animation state when tile props change
   React.useEffect(() => {
-    if (tile.isMatched) {
-      setCurrentAnimation('explode');
-    } else if (tile.isAnimating && !tile.isMatched) {
-      setCurrentAnimation('fallIn');
+    if (isSelected) {
+      debugLog('GAME_TILE', `Animation update check for selected tile [${row},${col}]:`, {
+        isMatched: tile.isMatched,
+        isAnimating: tile.isAnimating,
+        currentAnimation,
+        isProcessing: animationStateRef.current.isProcessing,
+        shouldExplode: tile.isMatched && !currentAnimation && !animationStateRef.current.isProcessing,
+        shouldFall: tile.isAnimating && !tile.isMatched && !currentAnimation && !animationStateRef.current.isProcessing
+      });
     }
-  }, [tile.isMatched, tile.isAnimating]);
+
+    // Only start new animations if we're not currently processing one
+    if (!animationStateRef.current.isProcessing) {
+      if (tile.isMatched && !currentAnimation) {
+        debugLog('GAME_TILE', `Setting explode animation for tile [${row},${col}]`);
+        animationStateRef.current.isProcessing = true;
+        setCurrentAnimation('explode');
+        if (isSelected) {
+          selectTile(-1, -1); // Unselect the tile by setting invalid coordinates
+        }
+      } else if (tile.isAnimating && !tile.isMatched && !currentAnimation) {
+        debugLog('GAME_TILE', `Setting fallIn animation for tile [${row},${col}]`);
+        animationStateRef.current.isProcessing = true;
+        setCurrentAnimation('fallIn');
+      }
+    }
+  }, [tile.isMatched, tile.isAnimating, currentAnimation, row, col, isSelected]);
 
   const handleAnimationEnd = (e: React.AnimationEvent) => {
-    console.log(`Animation ended for tile [${row},${col}]: ${e.animationName}`, {
+    debugLog('GAME_TILE', `Animation ended for tile [${row},${col}]:`, {
+      animationName: e.animationName,
       currentAnimation,
-      tileState: tile
+      tileState: tile,
+      isSelected,
+      isMatched: tile.isMatched,
+      isAnimating: tile.isAnimating,
+      isProcessing: animationStateRef.current.isProcessing
     });
     
-    if (e.animationName === 'explode') {
+    if (e.animationName === 'explode' && currentAnimation === 'explode') {
+      debugLog('GAME_TILE', `Processing explode animation end for tile [${row},${col}]`);
+      setCurrentAnimation(null);
+      animationStateRef.current.isProcessing = false;
+      
       // Update the tile to be empty and ready for falling
       updateTile(row, col, {
         color: 'empty',
@@ -68,14 +113,16 @@ export const GameTile: React.FC<GameTileProps> = ({
         isNew: false,
         isAnimating: true // Keep animating for the fall animation
       });
-      setCurrentAnimation('fallIn');
-    } else if (e.animationName === 'fallIn') {
-      // Only clear animation state after fall is complete
-      updateTile(row, col, {
-        ...tile,
-        isAnimating: false
-      });
+    } else if (e.animationName === 'fallIn' && currentAnimation === 'fallIn') {
+      debugLog('GAME_TILE', `Processing fallIn animation end for tile [${row},${col}]`);
       setCurrentAnimation(null);
+      animationStateRef.current.isProcessing = false;
+      
+      // Update the tile state
+      updateTile(row, col, {
+        isAnimating: false,
+        isNew: false
+      });
     }
     
     onAnimationEnd?.(e);
@@ -84,27 +131,34 @@ export const GameTile: React.FC<GameTileProps> = ({
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `${row}-${col}`,
     data: { row, col },
-    disabled: !isHumanTurn || tile.isFrozen || (isSkillActive && !canTargetWithSkill) || currentAnimation !== null,
+    disabled: !isHumanTurn || tile.isFrozen || (isSkillActive && !canTargetWithSkill) || currentAnimation === 'fallIn',
   });
 
   const { setNodeRef: setDropRef } = useDroppable({
     id: `${row}-${col}`,
     data: { row, col },
-    disabled: !isHumanTurn || (isSkillActive && !canTargetWithSkill) || currentAnimation !== null,
+    disabled: !isHumanTurn || (isSkillActive && !canTargetWithSkill) || currentAnimation === 'fallIn',
   });
 
   const handleClick = () => {
-    if (!isHumanTurn) return;
-    if (isSkillActive) {
-      if (!activeSkill) return;
-      
-      // For non-targeted skills, we can use any tile
+    if (!isHumanTurn || currentAnimation === 'fallIn') return;
+    
+    // Always select the tile first
+    selectTile(row, col);
+    
+    // If a skill is active, check if we can use it on this tile
+    if (isSkillActive && activeSkill) {
+      // For non-targeted skills or matching target color
       if (!activeSkill.targetColor || tile.color === activeSkill.targetColor) {
-        selectTile(row, col);
         useSkill(row, col);
+      } else {
+        toast.error(`This skill can only target ${activeSkill.targetColor} tiles!`);
       }
     }
   };
+
+  // Determine if this tile should show selection during animation
+  const showSelectionDuringAnimation = isSelected && isSkillActive && currentAnimation === 'explode';
 
   return (
     <div
@@ -123,9 +177,9 @@ export const GameTile: React.FC<GameTileProps> = ({
         ${isDragging ? 'opacity-50 scale-105' : 'opacity-100 scale-100'}
         ${isAiSelected ? 'ring-4 ring-white ring-opacity-50 animate-pulse' : ''}
         ${currentAnimation === 'explode' ? 'ring-4 ring-white ring-opacity-75 animate-[explode_0.3s_ease-out]' : ''}
-        ${isSelected ? 'ring-4 ring-yellow-400 ring-opacity-75' : ''}
+        ${(isSelected && !currentAnimation) || showSelectionDuringAnimation ? 'ring-4 ring-yellow-400 ring-opacity-75' : ''}
         ${tile.color === 'empty' && !tile.isAnimating ? 'opacity-0' : ''}
-        ${isSkillActive && canTargetWithSkill && isHumanTurn ? 'cursor-pointer hover:ring-4 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
+        ${isSkillActive && canTargetWithSkill && isHumanTurn && !currentAnimation ? 'cursor-pointer hover:ring-4 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
         ${currentAnimation === 'fallIn' ? 'animate-[fallIn_0.3s_ease-in-out]' : ''}
         transition-all duration-300`}
       onAnimationEnd={handleAnimationEnd}

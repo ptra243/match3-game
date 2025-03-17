@@ -1,13 +1,41 @@
 import { StateCreator } from 'zustand';
 import { GameState, Color } from '../types';
+import { debugLog } from './debug';
 
 const BOARD_SIZE = 8;
 
 export interface GameSlice {
   resetGame: () => void;
+  isGameOver: boolean;
+  extraTurnGranted: boolean;
+  currentMatchSequence: number;
+  currentCombo: number;
+  setExtraTurn: (granted: boolean) => void;
+  incrementMatchSequence: () => void;
+  resetMatchSequence: () => void;
+  incrementCombo: () => void;
+  resetCombo: () => void;
+  animationInProgress: boolean;
+  signalAnimationComplete: () => void;
+  waitForAnimation: () => Promise<void>;
 }
 
-export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set) => ({
+export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set, get) => ({
+  animationInProgress: false,
+  signalAnimationComplete: () => {},
+  waitForAnimation: () => {
+    debugLog('GAME_SLICE', 'Waiting for animation to complete');
+    return new Promise<void>((resolve) => {
+      set({ 
+        animationInProgress: true,
+        signalAnimationComplete: () => {
+          debugLog('GAME_SLICE', 'Animation completed');
+          set({ animationInProgress: false });
+          resolve();
+        }
+      });
+    });
+  },
   resetGame: () => {
     set({
       board: Array(BOARD_SIZE).fill(null).map(() => 
@@ -25,10 +53,12 @@ export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set)
       isGameOver: false,
       currentMatchSequence: 0,
       currentCombo: 0,
+      animationInProgress: false,
+      signalAnimationComplete: () => {},
       human: {
         health: 100,
         className: '',
-        equippedSkills: ['', '', ''],
+        equippedSkills: [],
         activeSkillId: null,
         skillCastCount: {},
         matchedColors: {
@@ -44,7 +74,7 @@ export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set)
       ai: {
         health: 100,
         className: '',
-        equippedSkills: ['', '', ''],
+        equippedSkills: [],
         activeSkillId: null,
         skillCastCount: {},
         matchedColors: {
@@ -59,4 +89,14 @@ export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set)
       }
     });
   },
+  isGameOver: false,
+  extraTurnGranted: false,
+  currentMatchSequence: 0,
+  currentCombo: 0,
+
+  setExtraTurn: (granted: boolean) => set({ extraTurnGranted: granted }),
+  incrementMatchSequence: () => set(state => ({ currentMatchSequence: state.currentMatchSequence + 1 })),
+  resetMatchSequence: () => set({ currentMatchSequence: 0 }),
+  incrementCombo: () => set(state => ({ currentCombo: state.currentCombo + 1 })),
+  resetCombo: () => set({ currentCombo: 0 })
 }); 

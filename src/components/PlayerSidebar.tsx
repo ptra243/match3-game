@@ -6,6 +6,7 @@ import { CLASSES } from '../store/classes';
 import { TileIcon } from './game-board/TileIcon';
 import { ALL_SKILLS } from '../store/skills';
 import { toast } from 'react-hot-toast';
+import { MATCH_RULES } from '../store/gameRules';
 
 interface PlayerSidebarProps {
   player: Player;
@@ -18,9 +19,14 @@ interface DamageTooltipProps {
 }
 
 const DamageTooltip: React.FC<DamageTooltipProps> = ({ color, isPrimary }) => {
+  const multiplier = isPrimary ? MATCH_RULES.DAMAGE_CALCULATION.COLOR_MULTIPLIERS.PRIMARY : MATCH_RULES.DAMAGE_CALCULATION.COLOR_MULTIPLIERS.SECONDARY;
+  const baseMatch = 3 * multiplier;
+  const fourMatch = (4 + MATCH_RULES.DAMAGE_CALCULATION.LENGTH_BONUS_MULTIPLIER) * multiplier;
+  const fiveMatch = (5 + 2 * MATCH_RULES.DAMAGE_CALCULATION.LENGTH_BONUS_MULTIPLIER) * multiplier;
+
   const damageText = isPrimary
-    ? "Primary Color: 3 damage for 3-match, 5 for 4-match, 8 for 5-match"
-    : "Secondary Color: 1 damage for 3-match, 2 for 4-match, 3 for 5-match";
+    ? `Primary Color: ${baseMatch} damage for 3-match, ${fourMatch} for 4-match, ${fiveMatch} for 5-match`
+    : `Secondary Color: ${baseMatch} damage for 3-match, ${fourMatch} for 4-match, ${fiveMatch} for 5-match`;
 
   return (
     <div className="absolute invisible group-hover:visible bg-gray-900 text-white p-2 rounded-lg text-sm w-48 z-10">

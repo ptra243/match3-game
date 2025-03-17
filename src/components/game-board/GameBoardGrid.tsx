@@ -44,11 +44,11 @@ export const GameBoardGrid: React.FC<GameBoardGridProps> = ({ activeTile }) => {
         }
       });
     });
-    console.log('Animation tracking - Board changed, counting animations:', {
-      matched: board.flat().filter(t => t.isMatched).length,
-      animating: board.flat().filter(t => t.isAnimating).length,
-      total: count
-    });
+    // console.log('Animation tracking - Board changed, counting animations:', {
+    //   matched: board.flat().filter(t => t.isMatched).length,
+    //   animating: board.flat().filter(t => t.isAnimating).length,
+    //   total: count
+    // });
     
     setAnimatingTiles(count);
     animatingTilesRef.current = count;
@@ -56,12 +56,12 @@ export const GameBoardGrid: React.FC<GameBoardGridProps> = ({ activeTile }) => {
 
   // When all animations complete, signal it
   React.useEffect(() => {
-    console.log('Animation tracking - animatingTiles count changed:', {
-      state: animatingTiles,
-      ref: animatingTilesRef.current,
-      matched: board.flat().filter(t => t.isMatched).length,
-      animating: board.flat().filter(t => t.isAnimating).length
-    });
+    // console.log('Animation tracking - animatingTiles count changed:', {
+    //   state: animatingTiles,
+    //   ref: animatingTilesRef.current,
+    //   matched: board.flat().filter(t => t.isMatched).length,
+    //   animating: board.flat().filter(t => t.isAnimating).length
+    // });
     
     if (animatingTiles === 0 && animatingTilesRef.current === 0) {
       console.log('Animation tracking - All animations complete, sending signal');

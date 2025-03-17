@@ -10,6 +10,7 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
     cost: { red: 5 },
     primaryColor: 'red',
     secondaryColor: 'yellow',
+    requiresTarget: false,
     effect: async (state) => {
       console.log('Fiery Soul effect called');
       
@@ -38,10 +39,11 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
     id: 'fireball',
     name: 'Fireball',
     description: 'Choose a red tile to create an explosion, dealing 5 damage per red tile destroyed',
-    cost: { red: 4, yellow: 3 },
+    cost: {  },
     primaryColor: 'red',
     secondaryColor: 'yellow',
     targetColor: 'red',
+    requiresTarget: true,
     effect: async (state, row, col) => {
       console.log('Fireball effect called:', { row, col });
       if (row === undefined || col === undefined) {
@@ -53,48 +55,60 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
         return;
       }
 
-      const newBoard = state.board.map(r => [...r]);
-      let destroyedTiles = [];
+      const board = state.board;
+      let tilesToDestroy = [];
 
-      // First mark tiles for explosion
-      for (let i = Math.max(0, row - 2); i <= Math.min(state.board.length - 1, row + 2); i++) {
-        for (let j = Math.max(0, col - 2); j <= Math.min(state.board[0].length - 1, col + 2); j++) {
+      // Mark tiles for explosion in a diamond pattern
+      for (let i = Math.max(0, row - 2); i <= Math.min(board.length - 1, row + 2); i++) {
+        for (let j = Math.max(0, col - 2); j <= Math.min(board[0].length - 1, col + 2); j++) {
           // Calculate Manhattan distance
           const distance = Math.abs(i - row) + Math.abs(j - col);
           if (distance <= 2) {
-            destroyedTiles.push({
-              row: i,
-              col: j,
-              color: newBoard[i][j].color
+            tilesToDestroy.push({ row: i, col: j });
+            console.log(`Adding tile to destroy at [${i},${j}] with distance ${distance} from center [${row},${col}]`, {
+              currentTileState: board[i][j]
             });
-            newBoard[i][j] = {
-              ...newBoard[i][j],
-              isMatched: true,
-              isAnimating: true
-            };
           }
         }
       }
 
-      // Update the board to show explosion animation
-      state.board = newBoard;
-      
-      // Wait for explosion animation
-      await state.waitForAnimation();
+      console.log('Tiles to destroy:', {
+        count: tilesToDestroy.length,
+        tiles: tilesToDestroy,
+        centerTileIncluded: tilesToDestroy.some(t => t.row === row && t.col === col)
+      });
 
-      // Now convert the affected tiles to empty with fallIn animation
-      const finalBoard = newBoard.map(row => row.map(tile => 
-        tile.isMatched ? {
-          color: 'empty' as Color,
-          isMatched: false,
-          isNew: false,
+      // First, directly mark the tiles in the board state
+      tilesToDestroy.forEach(({ row: r, col: c }) => {
+        board[r][c] = {
+          ...board[r][c],
+          isMatched: true,
           isAnimating: true,
-          isFrozen: false,
-          isIgnited: false
-        } as Tile : tile
-      ));
+          isNew: false
+        };
+      });
 
-      // Count red tiles and update resources
+      // Update the board state to trigger React updates
+      state.setBoard([...board]);
+
+      // Then use markTilesForDestruction to handle the destruction process
+      const { destroyedTiles } = await state.markTilesForDestruction(tilesToDestroy);
+      console.log('Tiles marked for destruction:', {
+        destroyedCount: destroyedTiles.length,
+        destroyedTiles,
+        centerDestroyed: destroyedTiles.some(t => t.row === row && t.col === col)
+      });
+
+      // Verify the board state after marking tiles
+      const centerTile = state.board[row][col];
+      console.log('Center tile state after marking:', {
+        position: [row, col],
+        tile: centerTile,
+        isMatched: centerTile.isMatched,
+        isAnimating: centerTile.isAnimating
+      });
+
+      // Count red tiles and apply damage
       const redTiles = destroyedTiles.filter(t => t.color === 'red').length;
       const damage = redTiles * 5; // 5 damage per red tile
 
@@ -110,15 +124,6 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
         }
       });
 
-      // Update the board with empty tiles
-      state.board = finalBoard;
-
-      // Wait for fall animation
-      await state.waitForAnimation();
-
-      // Process any matches that might have formed
-      await state.processNewBoard(finalBoard);
-
       toast.success(`Fireball destroyed ${destroyedTiles.length} tiles and dealt ${damage} damage!`);
     }
   }
@@ -133,6 +138,7 @@ export const BLOOD_MAGE_SKILLS: ClassSkill[] = [
     cost: { red: 3, blue: 3 },
     primaryColor: 'red',
     secondaryColor: 'blue',
+    requiresTarget: false,
     effect: async (state) => {
       const player = state.currentPlayer;
       state[player].health = Math.max(1, state[player].health - 5);
@@ -151,6 +157,7 @@ export const BLOOD_MAGE_SKILLS: ClassSkill[] = [
     cost: { red: 4, blue: 4 },
     primaryColor: 'red',
     secondaryColor: 'blue',
+    requiresTarget: false,
     effect: async (state) => {
       state[state.currentPlayer].statusEffects.push({
         damageMultiplier: 2,

@@ -170,14 +170,34 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     const { currentPlayer, board } = state;
     const playerState = state[currentPlayer];
     const activeSkillId = playerState.activeSkillId;
-    const activeSkill = activeSkillId ? ALL_SKILLS[activeSkillId] : null;
-
-    console.log('useSkill called:', { row, col, activeSkillId, activeSkill });
-
-    if (!activeSkill) {
+    
+    console.log('useSkill starting:', {
+      row,
+      col,
+      activeSkillId,
+      currentPlayer,
+      tileState: board[row][col],
+      playerState
+    });
+    
+    if (!activeSkillId) {
       console.log('No active skill found');
       return;
     }
+
+    const activeSkill = ALL_SKILLS[activeSkillId];
+    if (!activeSkill) {
+      console.log('Invalid skill ID:', activeSkillId);
+      return;
+    }
+
+    console.log('Skill validation:', {
+      skillId: activeSkillId,
+      skill: activeSkill,
+      targetColor: activeSkill.targetColor,
+      tileColor: board[row][col].color,
+      isValidTarget: !activeSkill.targetColor || board[row][col].color === activeSkill.targetColor
+    });
 
     // Check target color if skill requires specific target
     if (activeSkill.targetColor && board[row][col].color !== activeSkill.targetColor) {
@@ -195,12 +215,25 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       newMatchedColors[color as Color] -= (cost || 0);
     });
 
-    console.log('Applying skill effect:', activeSkill.id);
+    console.log('Applying skill effect:', {
+      skillId: activeSkill.id,
+      targetTile: [row, col],
+      boardState: board[row][col]
+    });
     
     // Apply skill effect
     try {
       await activeSkill.effect(state, row, col);
-      console.log('Skill effect applied successfully');
+      console.log('Skill effect completed, getting updated board');
+
+      // Get the current board state after the skill effect
+      const updatedBoard = get().board;
+      console.log('Processing updated board:', {
+        centerTileState: updatedBoard[row][col],
+        hasMatchedTiles: updatedBoard.some(row => row.some(tile => tile.isMatched))
+      });
+      
+      await get().processNewBoard(updatedBoard);
     } catch (error) {
       console.error('Error applying skill effect:', error);
     }
@@ -229,6 +262,9 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       const playerState = get()[player];
       // Apply mana conversion effects
       playerState.statusEffects.forEach(effect => {
+        if(effect.extraTurn){
+          get().setExtraTurn(true);
+        }
         if (effect.manaConversion) {
           const { from, to, ratio } = effect.manaConversion;
           const fromAmount = playerState.matchedColors[from];
@@ -281,14 +317,15 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     const currentCombo = get().currentCombo;
     const hasComboExtraTurn = currentCombo >= 10;
     if (hasComboExtraTurn) {
+      get().setExtraTurn(true);
       toast.success(`${currentCombo} combo! Extra turn granted!`);
     }
     const shouldSwitchPlayer = currentPlayer === 'human'
       ? (!humanHasExtraTurn && !hasComboExtraTurn)
       : (!aiHasExtraTurn && !hasComboExtraTurn);
       
-      // Reset combo counter when switching players
-    set({ currentCombo: 0 });
+    // Reset combo counter when switching players
+    get().resetCombo();
     if (shouldSwitchPlayer) {
       set(_ => ({
         currentPlayer: nextPlayer,
@@ -468,6 +505,8 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       
       // Execute the move
       await get().swapTiles(bestMove.row1, bestMove.col1, bestMove.row2, bestMove.col2);
+      //switch player after move. If we have an extra turn, it will be handled in switchPlayer
+      get().switchPlayer();
       return;
     }
 

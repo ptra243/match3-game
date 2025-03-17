@@ -11,15 +11,16 @@ import { useGameStore } from '../../store/gameStore';
 import { GameBoardAnimations } from './GameBoardAnimations';
 import { GameBoardGrid } from './GameBoardGrid';
 import { GameTile } from './GameTile';
+import { debugLog } from '../../store/slices/debug';
 
 export const GameBoard: React.FC = () => {
-  const { board, swapTiles, checkMatches, initializeBoard } = useGameStore();
+  const { board, swapTiles, initializeBoard } = useGameStore();
   const [activeTile, setActiveTile] = React.useState<{ row: number; col: number } | null>(null);
 
   // Check if board is initialized
   React.useEffect(() => {
     const nonEmptyTiles = board.flat().filter(tile => tile.color !== 'empty').length;
-    console.log('GameBoard - Board state check:', {
+    debugLog('GAME_BOARD', 'Board state check:', {
       totalTiles: board.flat().length,
       nonEmptyTiles,
       isEmpty: nonEmptyTiles === 0
@@ -27,7 +28,7 @@ export const GameBoard: React.FC = () => {
     
     // If board is empty, initialize it
     if (nonEmptyTiles === 0) {
-      console.log('GameBoard - Board is empty, initializing');
+      debugLog('GAME_BOARD', 'Board is empty, initializing');
       initializeBoard();
     }
   }, [board, initializeBoard]);
@@ -61,10 +62,12 @@ export const GameBoard: React.FC = () => {
       (Math.abs(activeRow - overRow) === 1 && activeCol === overCol);
 
     if (isAdjacent) {
-      const swapped = await swapTiles(activeRow, activeCol, overRow, overCol);
-      if (swapped) {
-        await checkMatches();
-      }
+      await swapTiles(activeRow, activeCol, overRow, overCol);
+      //swapTiles will call processNewBoard
+
+      // if (swapped) {
+      //   await processNewBoard(board);
+      // }
     }
 
     setActiveTile(null);
