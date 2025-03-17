@@ -407,61 +407,28 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       tempBoard[row1][col1] = { ...tempBoard[row2][col2] };
       tempBoard[row2][col2] = { ...temp };
 
+      // Use our existing findMatches function to find all matches
+      const matches = get().findMatches(tempBoard);
+      if (matches.length === 0) return -1;
+
       let score = 0;
-
-      // Check for matches in all directions
-      const checkMatch = (r: number, c: number, dr: number, dc: number, length: number): boolean => {
-        const color = tempBoard[r][c].color;
-        if (color === 'empty') return false;
-
-        for (let i = 1; i < length; i++) {
-          const newR = r + dr * i;
-          const newC = c + dc * i;
-          if (newR < 0 || newR >= BOARD_SIZE || newC < 0 || newC >= BOARD_SIZE) return false;
-          if (tempBoard[newR][newC].color !== color) return false;
+      matches.forEach(match => {
+        // Base score for any match
+        score += 1000;
+        
+        // Bonus for match length
+        if (match.tiles.length > 3) {
+          score += (match.tiles.length - 3) * 2000;
         }
-        return true;
-      };
 
-      // Check horizontal matches
-      for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE - 2; c++) {
-          if (checkMatch(r, c, 0, 1, 3)) {
-            const color = tempBoard[r][c].color;
-            score += 1000; // Base score for a match
-            if (color === characterClass.primaryColor) score += 5000;
-            else if (color === characterClass.secondaryColor) score += 3000;
-            
-            // Check for 4 or 5 matches
-            if (c < BOARD_SIZE - 3 && checkMatch(r, c, 0, 1, 4)) {
-              score += 2000;
-              if (c < BOARD_SIZE - 4 && checkMatch(r, c, 0, 1, 5)) {
-                score += 3000;
-              }
-            }
-          }
+        // Color-based scoring
+        const color = match.color;
+        if (color === characterClass.primaryColor) {
+          score += 5000;
+        } else if (color === characterClass.secondaryColor) {
+          score += 3000;
         }
-      }
-
-      // Check vertical matches
-      for (let c = 0; c < BOARD_SIZE; c++) {
-        for (let r = 0; r < BOARD_SIZE - 2; r++) {
-          if (checkMatch(r, c, 1, 0, 3)) {
-            const color = tempBoard[r][c].color;
-            score += 1000; // Base score for a match
-            if (color === characterClass.primaryColor) score += 5000;
-            else if (color === characterClass.secondaryColor) score += 3000;
-            
-            // Check for 4 or 5 matches
-            if (r < BOARD_SIZE - 3 && checkMatch(r, c, 1, 0, 4)) {
-              score += 2000;
-              if (r < BOARD_SIZE - 4 && checkMatch(r, c, 1, 0, 5)) {
-                score += 3000;
-              }
-            }
-          }
-        }
-      }
+      });
 
       return score;
     };

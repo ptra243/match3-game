@@ -39,7 +39,7 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
     id: 'fireball',
     name: 'Fireball',
     description: 'Choose a red tile to create an explosion, dealing 5 damage per red tile destroyed',
-    cost: {  },
+    cost: { red: 4, yellow: 3 },
     primaryColor: 'red',
     secondaryColor: 'yellow',
     targetColor: 'red',
@@ -78,36 +78,8 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
         centerTileIncluded: tilesToDestroy.some(t => t.row === row && t.col === col)
       });
 
-      // First, directly mark the tiles in the board state
-      tilesToDestroy.forEach(({ row: r, col: c }) => {
-        board[r][c] = {
-          ...board[r][c],
-          isMatched: true,
-          isAnimating: true,
-          isNew: false
-        };
-      });
-
-      // Update the board state to trigger React updates
-      state.setBoard([...board]);
-
-      // Then use markTilesForDestruction to handle the destruction process
       const { destroyedTiles } = await state.markTilesForDestruction(tilesToDestroy);
-      console.log('Tiles marked for destruction:', {
-        destroyedCount: destroyedTiles.length,
-        destroyedTiles,
-        centerDestroyed: destroyedTiles.some(t => t.row === row && t.col === col)
-      });
-
-      // Verify the board state after marking tiles
-      const centerTile = state.board[row][col];
-      console.log('Center tile state after marking:', {
-        position: [row, col],
-        tile: centerTile,
-        isMatched: centerTile.isMatched,
-        isAnimating: centerTile.isAnimating
-      });
-
+    
       // Count red tiles and apply damage
       const redTiles = destroyedTiles.filter(t => t.color === 'red').length;
       const damage = redTiles * 5; // 5 damage per red tile

@@ -22,235 +22,171 @@ export interface MatchSlice {
   findMatches: (board: Tile[][]) => Match[];
   hasValidMoves: () => boolean;
   markTilesAsMatched: (tiles: { row: number; col: number }[]) => Promise<{ matchedTiles: { row: number; col: number; color: Color }[] }>;
-  markTilesForDestruction: (tiles: { row: number; col: number }[]) => Promise<{ destroyedTiles: { row: number; col: number; color: Color }[] }>;
   convertTiles: (tiles: { row: number; col: number; color: Color }[]) => Promise<void>;
 }
 
+class UnionFind {
+  private parent: Map<string, string>;
+  private sets: Map<string, { color: Color; tiles: { row: number; col: number }[] }>;
+
+  constructor() {
+    this.parent = new Map();
+    this.sets = new Map();
+  }
+
+  makeSet(tile: { row: number; col: number }, color: Color) {
+    const key = `${tile.row},${tile.col}`;
+    if (!this.parent.has(key)) {
+      this.parent.set(key, key);
+      this.sets.set(key, { color, tiles: [tile] });
+    }
+  }
+
+  find(tile: { row: number; col: number }): string {
+    const key = `${tile.row},${tile.col}`;
+    if (!this.parent.has(key)) return key;
+    
+    let root = this.parent.get(key)!;
+    if (root !== key) {
+      root = this.find({ row: parseInt(root.split(',')[0]), col: parseInt(root.split(',')[1]) });
+      this.parent.set(key, root); // Path compression
+    }
+    return root;
+  }
+
+  union(tile1: { row: number; col: number }, tile2: { row: number; col: number }) {
+    const root1 = this.find(tile1);
+    const root2 = this.find(tile2);
+
+    if (root1 !== root2) {
+      this.parent.set(root2, root1);
+      const set1 = this.sets.get(root1)!;
+      const set2 = this.sets.get(root2)!;
+      
+      // Merge sets
+      const allTiles = [...set1.tiles, ...set2.tiles];
+      const distinctTiles = allTiles.filter((tile, index, self) => 
+        index === self.findIndex(t => t.row === tile.row && t.col === tile.col)
+      );
+      
+      this.sets.set(root1, {
+        color: set1.color,
+        tiles: distinctTiles
+      });
+      this.sets.delete(root2);
+    }
+  }
+
+  getSets(): Match[] {
+    const uniqueSets = new Set<string>();
+    const matches: Match[] = [];
+
+    for (const [key, value] of this.sets.entries()) {
+      const root = this.find({ row: parseInt(key.split(',')[0]), col: parseInt(key.split(',')[1]) });
+      if (!uniqueSets.has(root)) {
+        uniqueSets.add(root);
+        const set = this.sets.get(root)!;
+        if (set.tiles.length >= 3) {
+          matches.push({
+            color: set.color,
+            tiles: set.tiles,
+            length: set.tiles.length
+          });
+        }
+      }
+    }
+
+    return matches;
+  }
+}
 
 /**
- * Finds all matches on the board, including special shapes (T and L).
+ * Finds all matches on the board using a color island approach.
  * @param board The current game board
  * @returns Array of matches found
  */
 const findMatches = (board: Tile[][]): TileMatch[] => {
-  const matches: TileMatch[] = [];
   const BOARD_SIZE = board.length;
   const visited = new Set<string>();
+  const unionFind = new UnionFind();
 
-  // Helper to check if a tile has been included in a match
-  const isVisited = (row: number, col: number) => visited.has(`${row},${col}`);
-  const markVisited = (row: number, col: number) => visited.add(`${row},${col}`);
-  const markTilesVisited = (tiles: { row: number; col: number }[]) => {
-    tiles.forEach(tile => markVisited(tile.row, tile.col));
-  };
+  // Helper to check/mark visited tiles
+  const getTileKey = (row: number, col: number) => `${row},${col}`;
+  const isVisited = (row: number, col: number) => visited.has(getTileKey(row, col));
+  const markVisited = (row: number, col: number) => visited.add(getTileKey(row, col));
+  const isValidTile = (row: number, col: number) => 
+    row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
 
-  // First, find all potential T and L shapes and 5-matches
-  // Check for horizontal 5-matches
+  // Helper to check if a tile matches color and isn't visited
+  const isMatchingTile = (row: number, col: number, color: Color) => 
+    isValidTile(row, col) && 
+    board[row][col].color === color && 
+    !isVisited(row, col) &&
+    board[row][col].color !== 'empty';
+
+  // Process each tile on the board
   for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE - 4; col++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (isVisited(row, col) || board[row][col].color === 'empty') continue;
 
-      // Check for 5 in a row
-      if (board[row][col + 1].color === color &&
-          board[row][col + 2].color === color &&
-          board[row][col + 3].color === color &&
-          board[row][col + 4].color === color) {
-        const matchTiles = [];
-        for (let i = 0; i < 5; i++) {
-          matchTiles.push({ row, col: col + i });
+      const color = board[row][col].color;
+      const currentTile = { row, col };
+      
+      // Initialize the set for current tile
+      unionFind.makeSet(currentTile, color);
+      markVisited(row, col);
+
+      // Check horizontal and vertical lines separately
+      const directions = [
+        [[0, 1], [0, -1]], // horizontal: right and left
+        [[1, 0], [-1, 0]]  // vertical: down and up
+      ];
+
+      for (const [dir1, dir2] of directions) {
+        const lineTiles = [currentTile];
+        
+        // Check first direction
+        let nextRow = row + dir1[0];
+        let nextCol = col + dir1[1];
+        while (isMatchingTile(nextRow, nextCol, color)) {
+          const nextTile = { row: nextRow, col: nextCol };
+          lineTiles.push(nextTile);
+          markVisited(nextRow, nextCol);
+          nextRow += dir1[0];
+          nextCol += dir1[1];
         }
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length: 5
-        });
-        markTilesVisited(matchTiles);
-      }
-    }
-  }
-
-  // Check for vertical 5-matches
-  for (let col = 0; col < BOARD_SIZE; col++) {
-    for (let row = 0; row < BOARD_SIZE - 4; row++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      // Check for 5 in a column
-      if (board[row + 1][col].color === color &&
-          board[row + 2][col].color === color &&
-          board[row + 3][col].color === color &&
-          board[row + 4][col].color === color) {
-        const matchTiles = [];
-        for (let i = 0; i < 5; i++) {
-          matchTiles.push({ row: row + i, col });
+        
+        // Check opposite direction
+        nextRow = row + dir2[0];
+        nextCol = col + dir2[1];
+        while (isMatchingTile(nextRow, nextCol, color)) {
+          const nextTile = { row: nextRow, col: nextCol };
+          lineTiles.unshift(nextTile); // Add to start to maintain order
+          markVisited(nextRow, nextCol);
+          nextRow += dir2[0];
+          nextCol += dir2[1];
         }
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length: 5
-        });
-        markTilesVisited(matchTiles);
-      }
-    }
-  }
 
-  // Check for T shapes
-  for (let row = 1; row < BOARD_SIZE - 1; row++) {
-    for (let col = 0; col < BOARD_SIZE - 2; col++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      // Check for horizontal part of T
-      if (board[row][col + 1].color === color &&
-          board[row][col + 2].color === color) {
-        // Check for vertical part at middle tile
-        const midCol = col + 1;
-        if (board[row - 1][midCol].color === color &&
-            board[row + 1][midCol].color === color) {
-          const tShapeTiles = [
-            { row, col },
-            { row, col: col + 1 },
-            { row, col: col + 2 },
-            { row: row - 1, col: midCol },
-            { row: row + 1, col: midCol }
-          ];
-          matches.push({
-            color,
-            tiles: tShapeTiles,
-            isSpecialShape: 'T',
-            length: 5
+        // If we found a valid line (≥ 3 tiles), create the island
+        if (lineTiles.length >= 3) {
+          lineTiles.forEach(tile => {
+            unionFind.makeSet(tile, color);
+            unionFind.union(currentTile, tile);
           });
-          markTilesVisited(tShapeTiles);
-        }
-      }
-    }
-  }
-
-  // Check for L shapes
-  for (let row = 0; row < BOARD_SIZE - 2; row++) {
-    for (let col = 0; col < BOARD_SIZE - 2; col++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      // Check for vertical part of L
-      if (board[row + 1][col].color === color &&
-          board[row + 2][col].color === color) {
-        // Check for horizontal part at bottom
-        if (board[row + 2][col + 1].color === color &&
-            board[row + 2][col + 2].color === color) {
-          const lShapeTiles = [
-            { row, col },
-            { row: row + 1, col },
-            { row: row + 2, col },
-            { row: row + 2, col: col + 1 },
-            { row: row + 2, col: col + 2 }
-          ];
-          matches.push({
-            color,
-            tiles: lShapeTiles,
-            isSpecialShape: 'L',
-            length: 5
+        } else {
+          // If not a valid line, unmark the visited tiles so they can be part of other potential matches
+          lineTiles.forEach(tile => {
+            if (tile !== currentTile) { // Keep current tile marked as visited
+              visited.delete(getTileKey(tile.row, tile.col));
+            }
           });
-          markTilesVisited(lShapeTiles);
         }
       }
     }
   }
 
-  // Then find 4-matches
-  // Horizontal 4-matches
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE - 3; col++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      if (board[row][col + 1].color === color &&
-          board[row][col + 2].color === color &&
-          board[row][col + 3].color === color) {
-        const matchTiles = [];
-        for (let i = 0; i < 4; i++) {
-          matchTiles.push({ row, col: col + i });
-        }
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length: 4
-        });
-        markTilesVisited(matchTiles);
-      }
-    }
-  }
-
-  // Vertical 4-matches
-  for (let col = 0; col < BOARD_SIZE; col++) {
-    for (let row = 0; row < BOARD_SIZE - 3; row++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      if (board[row + 1][col].color === color &&
-          board[row + 2][col].color === color &&
-          board[row + 3][col].color === color) {
-        const matchTiles = [];
-        for (let i = 0; i < 4; i++) {
-          matchTiles.push({ row: row + i, col });
-        }
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length: 4
-        });
-        markTilesVisited(matchTiles);
-      }
-    }
-  }
-
-  // Finally, find regular 3-matches
-  // Horizontal 3-matches
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE - 2; col++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      if (board[row][col + 1].color === color &&
-          board[row][col + 2].color === color) {
-        const matchTiles = [];
-        for (let i = 0; i < 3; i++) {
-          matchTiles.push({ row, col: col + i });
-        }
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length: 3
-        });
-        markTilesVisited(matchTiles);
-      }
-    }
-  }
-
-  // Vertical 3-matches
-  for (let col = 0; col < BOARD_SIZE; col++) {
-    for (let row = 0; row < BOARD_SIZE - 2; row++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      if (board[row + 1][col].color === color &&
-          board[row + 2][col].color === color) {
-        const matchTiles = [];
-        for (let i = 0; i < 3; i++) {
-          matchTiles.push({ row: row + i, col });
-        }
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length: 3
-        });
-        markTilesVisited(matchTiles);
-      }
-    }
-  }
-
-  return matches;
+  // Get all valid matches (sets with 3 or more tiles)
+  return unionFind.getSets();
 };
 
 /**
@@ -477,25 +413,6 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
     return { matchedTiles };
   },
 
-  markTilesForDestruction: async (tiles: { row: number; col: number }[]) => {
-    const board = get().board;
-    const destroyedTiles: { row: number; col: number; color: Color }[] = [];
-
-    // Create new board with destroyed tiles
-    const newBoard = board.map((row, rowIndex) => 
-      row.map((tile, colIndex) => {
-        const isDestroyed = tiles.some(t => t.row === rowIndex && t.col === colIndex);
-        if (isDestroyed) {
-          destroyedTiles.push({ row: rowIndex, col: colIndex, color: tile.color });
-          return { ...tile, isMatched: true, isAnimating: true };
-        }
-        return tile;
-      })
-    );
-
-    get().setBoard(newBoard);
-    return { destroyedTiles };
-  },
 
   convertTiles: async (tiles: { row: number; col: number; color: Color }[]) => {
     const board = get().board;
