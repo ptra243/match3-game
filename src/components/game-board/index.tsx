@@ -6,6 +6,7 @@ import {
   useSensor,
   useSensors,
   DragOverlay,
+  TouchSensor,
 } from '@dnd-kit/core';
 import { useGameStore } from '../../store/gameStore';
 import { GameBoardAnimations } from './GameBoardAnimations';
@@ -38,8 +39,14 @@ export const GameBoard: React.FC = () => {
       distance: 8,
     },
   });
-  
-  const sensors = useSensors(mouseSensor);
+  const touchSensor = useSensor(TouchSensor, {
+    // Increase the activation distance to make it more mobile-friendly
+    activationConstraint: {
+      delay: 250,
+      tolerance: 5,
+    }
+  });
+  const sensors = useSensors(mouseSensor, touchSensor);
 
   const handleDragStart = (event: any) => {
     const { active } = event;
