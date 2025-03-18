@@ -104,116 +104,154 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
   
   findMatches: (board: Tile[][]): Match[] => {
     const BOARD_SIZE = board.length;
-    const matches: Match[] = [];
-    const visited = new Set<string>();
+    const unionFind = new UnionFind();
+    const horizontalVisited = new Set<string>();
+    const verticalVisited = new Set<string>();
     
-    // Helper to check if a tile has been included in a match
-    const isVisited = (row: number, col: number) => visited.has(`${row},${col}`);
-    const markVisited = (row: number, col: number) => visited.add(`${row},${col}`);
+    // Helper to check/mark visited tiles
+    const getTileKey = (row: number, col: number) => `${row},${col}`;
+    const isHorizontallyVisited = (row: number, col: number) => horizontalVisited.has(getTileKey(row, col));
+    const markHorizontallyVisited = (row: number, col: number) => horizontalVisited.add(getTileKey(row, col));
+    const isVerticallyVisited = (row: number, col: number) => verticalVisited.has(getTileKey(row, col));
+    const markVerticallyVisited = (row: number, col: number) => verticalVisited.add(getTileKey(row, col));
     
-    // Find horizontal matches
+    // Process the board in a single pass
     for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE - 2; col++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        if (board[row][col].color === 'empty') continue;
+        
         const color = board[row][col].color;
-        if (color === 'empty' || isVisited(row, col)) continue;
         
-        // Check for horizontal match
-        let length = 1;
-        while (col + length < BOARD_SIZE && 
-               board[row][col + length].color === color &&
-               !isVisited(row, col + length)) {
-          length++;
-        }
-        
-        if (length >= GAME_CONSTANTS.MIN_MATCH_LENGTH) {
-          const matchTiles = [];
-          for (let i = 0; i < length; i++) {
-            matchTiles.push({ row, col: col + i });
-            markVisited(row, col + i);
+        // Check for horizontal match starting from this tile
+        if (col < BOARD_SIZE - 2 && !isHorizontallyVisited(row, col)) { // Need at least 3 tiles horizontally
+          let hLength = 1;
+          while (col + hLength < BOARD_SIZE && board[row][col + hLength].color === color) {
+            hLength++;
           }
           
-          matches.push({
-            color,
-            tiles: matchTiles,
-            length
-          });
+          // If we found a valid horizontal match (3+ tiles)
+          if (hLength >= 3) {
+            const currentTile = { row, col };
+            
+            // Create a set for this horizontal match
+            unionFind.makeSet(currentTile, color);
+            markHorizontallyVisited(row, col);
+            
+            // Add all tiles in this horizontal match to the set
+            for (let i = 1; i < hLength; i++) {
+              const nextTile = { row, col: col + i };
+              unionFind.makeSet(nextTile, color);
+              unionFind.union(currentTile, nextTile);
+              markHorizontallyVisited(row, col + i);
+            }
+          }
+        }
+        
+        // Check for vertical match starting from this tile
+        if (row < BOARD_SIZE - 2 && !isVerticallyVisited(row, col)) { // Need at least 3 tiles vertically
+          let vLength = 1;
+          while (row + vLength < BOARD_SIZE && board[row + vLength][col].color === color) {
+            vLength++;
+          }
           
-          // Check for T shape if match is 3 tiles
-          if (length === 3) {
-            // Check for vertical extension in middle tile
-            const midCol = col + 1;
-            if (row > 0 && row < BOARD_SIZE - 1 &&
-                board[row - 1][midCol].color === color &&
-                board[row + 1][midCol].color === color) {
-              matches.push({
-                color,
-                tiles: [
-                  ...matchTiles,
-                  { row: row - 1, col: midCol },
-                  { row: row + 1, col: midCol }
-                ],
-                isSpecialShape: 'T'
-              });
-              markVisited(row - 1, midCol);
-              markVisited(row + 1, midCol);
+          // If we found a valid vertical match (3+ tiles)
+          if (vLength >= 3) {
+            const currentTile = { row, col };
+            
+            // Create a set for this vertical match
+            unionFind.makeSet(currentTile, color);
+            markVerticallyVisited(row, col);
+            
+            // Add all tiles in this vertical match to the set
+            for (let i = 1; i < vLength; i++) {
+              const nextTile = { row: row + i, col };
+              unionFind.makeSet(nextTile, color);
+              unionFind.union(currentTile, nextTile);
+              markVerticallyVisited(row + i, col);
             }
           }
         }
       }
     }
     
-    // Find vertical matches
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      for (let row = 0; row < BOARD_SIZE - 2; row++) {
-        const color = board[row][col].color;
-        if (color === 'empty' || isVisited(row, col)) continue;
+    // Get all the matches
+    const matches = unionFind.getSets();
+    
+    // Identify special shapes within the matches
+    return matches.map(match => {
+      if (match.tiles.length !== 5) return match; // Special shapes have exactly 5 tiles
+      
+      // Check for T shape
+      const rowCounts = new Map<number, number>();
+      const colCounts = new Map<number, number>();
+      
+      match.tiles.forEach(tile => {
+        rowCounts.set(tile.row, (rowCounts.get(tile.row) || 0) + 1);
+        colCounts.set(tile.col, (colCounts.get(tile.col) || 0) + 1);
+      });
+      
+      // T shape: one row has 3 tiles, another two rows have 1 tile each in the same column
+      let isTShape = false;
+      let isLShape = false;
+      
+      // Check for horizontal bar with vertical extension (T shape)
+      const rowWith3 = Array.from(rowCounts.entries()).find(([_, count]) => count === 3);
+      if (rowWith3) {
+        const [rowIndex] = rowWith3;
+        const colsInRow3 = match.tiles
+          .filter(t => t.row === rowIndex)
+          .map(t => t.col)
+          .sort((a, b) => a - b);
         
-        // Check for vertical match
-        let length = 1;
-        while (row + length < BOARD_SIZE && 
-               board[row + length][col].color === color &&
-               !isVisited(row + length, col)) {
-          length++;
-        }
-        
-        if (length >= GAME_CONSTANTS.MIN_MATCH_LENGTH) {
-          const matchTiles = [];
-          for (let i = 0; i < length; i++) {
-            matchTiles.push({ row: row + i, col });
-            markVisited(row + i, col);
-          }
+        // Check if it's a contiguous row
+        if (colsInRow3[2] - colsInRow3[0] === 2) {
+          // Check for the vertical part (2 tiles)
+          const middleCol = colsInRow3[1];
+          const verticalTiles = match.tiles.filter(t => t.col === middleCol && t.row !== rowIndex);
           
-          matches.push({
-            color,
-            tiles: matchTiles,
-            length
-          });
-          
-          // Check for L shape if match is 3 tiles
-          if (length === 3) {
-            // Check for horizontal extension at bottom
-            const bottomRow = row + 2;
-            if (col < BOARD_SIZE - 2 &&
-                board[bottomRow][col + 1].color === color &&
-                board[bottomRow][col + 2].color === color) {
-              matches.push({
-                color,
-                tiles: [
-                  ...matchTiles,
-                  { row: bottomRow, col: col + 1 },
-                  { row: bottomRow, col: col + 2 }
-                ],
-                isSpecialShape: 'L'
-              });
-              markVisited(bottomRow, col + 1);
-              markVisited(bottomRow, col + 2);
-            }
+          if (verticalTiles.length === 2 && 
+              Math.abs(verticalTiles[0].row - verticalTiles[1].row) === 1) {
+            isTShape = true;
           }
         }
       }
-    }
-    
-    return matches;
+      
+      // Check for vertical bar with horizontal extension (L shape)
+      const colWith3 = Array.from(colCounts.entries()).find(([_, count]) => count === 3);
+      if (colWith3 && !isTShape) {
+        const [colIndex] = colWith3;
+        const rowsInCol3 = match.tiles
+          .filter(t => t.col === colIndex)
+          .map(t => t.row)
+          .sort((a, b) => a - b);
+        
+        // Check if it's a contiguous column
+        if (rowsInCol3[2] - rowsInCol3[0] === 2) {
+          // Bottom row of the vertical part
+          const bottomRow = rowsInCol3[2];
+          
+          // Check for the horizontal part (2 tiles extending right from bottom)
+          const horizontalTiles = match.tiles.filter(t => 
+            t.row === bottomRow && t.col !== colIndex
+          );
+          
+          if (horizontalTiles.length === 2 && 
+              horizontalTiles.every(t => t.col > colIndex) &&
+              horizontalTiles.sort((a, b) => a.col - b.col)[1].col - horizontalTiles[0].col === 1) {
+            isLShape = true;
+          }
+        }
+      }
+      
+      // Return the match with shape information
+      if (isTShape) {
+        return { ...match, isSpecialShape: 'T' as const };
+      } else if (isLShape) {
+        return { ...match, isSpecialShape: 'L' as const };
+      }
+      
+      return match;
+    });
   },
 
   processMatches: async () => {
