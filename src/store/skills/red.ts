@@ -12,12 +12,7 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
     secondaryColor: 'yellow',
     requiresTarget: false,
     effect: async (state) => {
-      console.log('Fiery Soul effect called');
-      
-      const player = state.currentPlayer;
-      console.log('Current player:', player);
-      console.log('Current status effects:', state[player].statusEffects);
-      
+      const player = state.currentPlayer;      
       // Add damage multiplier effect
       state[player].statusEffects.push({
         damageMultiplier: 2,
@@ -71,12 +66,6 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
           }
         }
       }
-
-      console.log('Tiles to destroy:', {
-        count: tilesToDestroy.length,
-        tiles: tilesToDestroy,
-        centerTileIncluded: tilesToDestroy.some(t => t.row === row && t.col === col)
-      });
 
       const { destroyedTiles } = await state.markTilesForDestruction(tilesToDestroy);
     

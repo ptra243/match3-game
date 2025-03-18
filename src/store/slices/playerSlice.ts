@@ -342,9 +342,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
 
   makeAiMove: async () => {
     // Wait for any ongoing animations to complete
-    if (get().animationInProgress) {
-      await get().waitForAnimation();
-    }
+    await get().waitForAllAnimations();
 
     const { board, ai } = get();
     const BOARD_SIZE = board.length;

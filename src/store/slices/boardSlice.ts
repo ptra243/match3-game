@@ -14,125 +14,6 @@ interface Match {
   length?: number;  // Track match length for extra turn conditions
 }
 
-/**
- * Finds all matches on the board, including special shapes (T and L).
- * Implements match rules from MATCH_RULES and EXTRA_TURN_CONDITIONS.
- * 
- * @preserveGameRules This function implements core matching rules.
- */
-const findMatches = (board: Tile[][]): Match[] => {
-  const matches: Match[] = [];
-  const visited = new Set<string>();
-
-  // Helper to check if a tile has been included in a match
-  const isVisited = (row: number, col: number) => visited.has(`${row},${col}`);
-  const markVisited = (row: number, col: number) => visited.add(`${row},${col}`);
-
-  // Find horizontal matches
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE - 2; col++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      // Check for horizontal match
-      let length = 1;
-      while (col + length < BOARD_SIZE && 
-             board[row][col + length].color === color &&
-             !isVisited(row, col + length)) {
-        length++;
-      }
-
-      if (length >= GAME_CONSTANTS.MIN_MATCH_LENGTH) {
-        const matchTiles = [];
-        for (let i = 0; i < length; i++) {
-          matchTiles.push({ row, col: col + i });
-          markVisited(row, col + i);
-        }
-        
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length
-        });
-
-        // Check for T shape if match is 3 tiles
-        if (length === 3) {
-          // Check for vertical extension in middle tile
-          const midCol = col + 1;
-          if (row > 0 && row < BOARD_SIZE - 1 &&
-              board[row - 1][midCol].color === color &&
-              board[row + 1][midCol].color === color) {
-            matches.push({
-              color,
-              tiles: [
-                ...matchTiles,
-                { row: row - 1, col: midCol },
-                { row: row + 1, col: midCol }
-              ],
-              isSpecialShape: 'T'
-            });
-            markVisited(row - 1, midCol);
-            markVisited(row + 1, midCol);
-          }
-        }
-      }
-    }
-  }
-
-  // Find vertical matches
-  for (let col = 0; col < BOARD_SIZE; col++) {
-    for (let row = 0; row < BOARD_SIZE - 2; row++) {
-      const color = board[row][col].color;
-      if (color === 'empty' || isVisited(row, col)) continue;
-
-      // Check for vertical match
-      let length = 1;
-      while (row + length < BOARD_SIZE && 
-             board[row + length][col].color === color &&
-             !isVisited(row + length, col)) {
-        length++;
-      }
-
-      if (length >= GAME_CONSTANTS.MIN_MATCH_LENGTH) {
-        const matchTiles = [];
-        for (let i = 0; i < length; i++) {
-          matchTiles.push({ row: row + i, col });
-          markVisited(row + i, col);
-        }
-        
-        matches.push({
-          color,
-          tiles: matchTiles,
-          length
-        });
-
-        // Check for L shape if match is 3 tiles
-        if (length === 3) {
-          // Check for horizontal extension at bottom
-          const bottomRow = row + 2;
-          if (col < BOARD_SIZE - 2 &&
-              board[bottomRow][col + 1].color === color &&
-              board[bottomRow][col + 2].color === color) {
-            matches.push({
-              color,
-              tiles: [
-                ...matchTiles,
-                { row: bottomRow, col: col + 1 },
-                { row: bottomRow, col: col + 2 }
-              ],
-              isSpecialShape: 'L'
-            });
-            markVisited(bottomRow, col + 1);
-            markVisited(bottomRow, col + 2);
-          }
-        }
-      }
-    }
-  }
-
-  return matches;
-};
-
 export interface BoardSlice {
   board: Tile[][];
   initializeBoard: () => void;
@@ -277,7 +158,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       debugLog('BOARD_SLICE', 'Tiles dropped, updating board');
       get().setBoard(newBoard);
       // Wait for the drop animation to complete
-      await get().waitForAnimation();
+      await get().waitForAllAnimations();
     }
 
     return newBoard;
@@ -288,32 +169,56 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     const board = get().board;
     const newBoard = board.map(row => [...row]);
     let hasFilled = false;
-
-    // Fill empty spaces with new tiles
+    
+    // Get empty positions for animations
+    const emptyPositions = [];
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         if (newBoard[row][col].color === 'empty') {
-          // Generate a new tile with random color from Color type
-          const colors: Color[] = ['red', 'green', 'blue', 'yellow', 'black']; // Using Color type
-          const newColor = colors[Math.floor(Math.random() * colors.length)];
-          newBoard[row][col] = {
-            color: newColor,
-            isMatched: false,
-            isNew: true,
-            isAnimating: true,
-            isFrozen: false,
-            isIgnited: false
-          };
-          hasFilled = true;
+          emptyPositions.push({ row, col });
         }
       }
+    }
+    
+    // Register fallIn animations for all empty positions first
+    const animationIds = [];
+    for (const { row, col } of emptyPositions) {
+      const tileId = `tile-${row}-${col}`;
+      // Generate a new color for this position
+      const colors: Color[] = ['red', 'green', 'blue', 'yellow', 'black'];
+      const newColor = colors[Math.floor(Math.random() * colors.length)];
+      
+      const animId = get().registerAnimation('fallIn', [tileId], { 
+        row, 
+        col, 
+        color: newColor
+      });
+      animationIds.push(animId);
+      
+      // Update the board with the new color and animation state
+      newBoard[row][col] = {
+        color: newColor,
+        isMatched: false,
+        isNew: true,
+        isAnimating: true,
+        isFrozen: false,
+        isIgnited: false
+      };
+      
+      hasFilled = true;
     }
 
     if (hasFilled) {
       debugLog('BOARD_SLICE', 'Empty tiles filled, updating board');
       get().setBoard(newBoard);
+      
+      // Start all fallIn animations
+      for (const animId of animationIds) {
+        get().startAnimation(animId);
+      }
+      
       // Wait for the fill animation to complete
-      await get().waitForAnimation();
+      await get().waitForAllAnimations();
     }
 
     return newBoard;
@@ -352,7 +257,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       debugLog('BOARD_SLICE', 'Found matched tiles, waiting for destruction animation');
       // Set the current board state with matched tiles
       set({ board: currentBoard });
-      await get().waitForAnimation();
+      await get().waitForAllAnimations();
 
       debugLog('BOARD_SLICE', 'Processing drops and fills');
       // Drop existing tiles and fill empty spaces
@@ -380,7 +285,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       
       // Set the board state after filling
       set({ board: currentBoard });
-      await get().waitForAnimation();
+      await get().waitForAllAnimations();
       debugLog('BOARD_SLICE', 'Drops and fills completed');
     }
 
@@ -408,7 +313,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
           currentBoard = await get().fillEmptyTiles();
           // Set the board state after filling
           set({ board: currentBoard });
-          await get().waitForAnimation();
+          await get().waitForAllAnimations();
         }
       } else {
         hasMatches = false; // Force exit if we hit the cascade limit
@@ -439,48 +344,51 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     const board = get().board;
     const destroyedTiles: { row: number; col: number; color: Color }[] = [];
 
-    // First, mark all tiles for destruction
-    tiles.forEach(({ row, col }) => {
-      const tile = board[row][col];
-      debugLog('BOARD_SLICE', `Processing tile [${row},${col}] for destruction:`, {
-        currentState: tile,
-        isAlreadyMatched: tile.isMatched,
-        isAnimating: tile.isAnimating
-      });
+    // 1. Create animation sequence for destroyed tiles
+    const animationIds = [];
 
-      // Store the tile's info before modifying
-      destroyedTiles.push({ row, col, color: tile.color });
+    // Register explode animations for all tiles being destroyed
+    for (const { row, col } of tiles) {
+      const tileId = `tile-${row}-${col}`;
+      const animId = get().registerAnimation('explode', [tileId], { 
+        row, 
+        col, 
+        color: board[row][col].color 
+      });
+      animationIds.push(animId);
       
-      // Always mark the tile as matched and animating
-      board[row][col] = {
-        ...tile,
-        isMatched: true,
-        isAnimating: true,
-        isNew: false // Ensure it's not treated as a new tile
-      };
+      // Store the tile's info
+      destroyedTiles.push({ row, col, color: board[row][col].color });
+    }
 
-      debugLog('BOARD_SLICE', `Marked tile [${row},${col}] for destruction`, {
-        newState: board[row][col]
-      });
-    });
+    // 2. Update the board state with marked tiles
+    const newBoard = board.map((row, rowIndex) => 
+      row.map((tile, colIndex) => {
+        const isDestroyed = tiles.some(t => t.row === rowIndex && t.col === colIndex);
+        if (isDestroyed) {
+          return { 
+            ...tile, 
+            isMatched: true, 
+            isAnimating: true,
+            isNew: false // Ensure it's not treated as a new tile
+          };
+        }
+        return tile;
+      })
+    );
 
-    // Update the board state with a new array reference to trigger React updates
-    set({ board: [...board] });
+    // 3. Update the board state
+    set({ board: newBoard });
     
-    // Log the final state of all affected tiles
-    tiles.forEach(({ row, col }) => {
-      debugLog('BOARD_SLICE', `Final state for tile [${row},${col}]:`, {
-        tile: board[row][col],
-        isMatched: board[row][col].isMatched,
-        isAnimating: board[row][col].isAnimating
-      });
-    });
-
-    debugLog('BOARD_SLICE', 'Tiles marked for destruction, final state:', {
-      destroyedTiles,
-      centerTileState: destroyedTiles.length > 0 ? board[tiles[0].row][tiles[0].col] : null
-    });
-
+    // 4. Start the animations
+    for (const animId of animationIds) {
+      get().startAnimation(animId);
+    }
+    
+    // 5. Wait for animations to complete
+    await get().waitForAllAnimations();
+    
+    debugLog('BOARD_SLICE', 'Tiles marked for destruction, animations complete', { destroyedTiles });
     return { destroyedTiles };
   },
 
@@ -489,40 +397,148 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     const board = get().board;
     const matchedTiles: { row: number; col: number; color: Color }[] = [];
 
-    tiles.forEach(({ row, col }) => {
-      const tile = board[row][col];
-      if (!tile.isMatched) {
-        matchedTiles.push({ row, col, color: tile.color });
-        board[row][col] = {
-          ...tile,
-          isMatched: true,
-          isAnimating: true
-        };
-      }
-    });
+    // 1. Create animation sequence for matched tiles
+    const sequenceId = `match-sequence-${Date.now()}`;
+    const animationIds = [];
 
-    set({ board: [...board] });
-    await get().waitForAnimation();
+    // Register explode animations for all matched tiles
+    for (const { row, col } of tiles) {
+      const tileId = `tile-${row}-${col}`;
+      const animId = get().registerAnimation('explode', [tileId], { 
+        row, 
+        col, 
+        color: board[row][col].color 
+      });
+      animationIds.push(animId);
+    }
 
-    debugLog('BOARD_SLICE', 'Tiles marked as matched', matchedTiles);
+    // 2. Mark tiles as matched in the board state
+    const newBoard = board.map((row, rowIndex) => 
+      row.map((tile, colIndex) => {
+        const isMatched = tiles.some(t => t.row === rowIndex && t.col === colIndex);
+        if (isMatched) {
+          matchedTiles.push({ row: rowIndex, col: colIndex, color: tile.color });
+          return { ...tile, isMatched: true, isAnimating: true };
+        }
+        return tile;
+      })
+    );
+
+    // 3. Update the board state
+    set({ board: newBoard });
+    
+    // 4. Start the animations and wait for them to complete
+    for (const animId of animationIds) {
+      get().startAnimation(animId);
+    }
+    
+    // 5. Wait for all animations to complete
+    await get().waitForAllAnimations();
+    
     return { matchedTiles };
   },
 
   convertTiles: async (tiles: { row: number; col: number; color: Color }[]) => {
     debugLog('BOARD_SLICE', 'Converting tiles', tiles);
+    
+    // 1. First mark the tiles as matched/empty and animate the explosion
     const board = get().board;
+    const destroyAnimIds = [];
+    
+    // Register explode animations for all tiles first
+    for (const { row, col } of tiles) {
+      const tileId = `tile-${row}-${col}`;
+      const animId = get().registerAnimation('explode', [tileId], { 
+        row, 
+        col, 
+        color: board[row][col].color 
+      });
+      destroyAnimIds.push(animId);
+    }
+    
+    // Update the board with exploding tiles
+    const explodeBoard = board.map((row, rowIndex) => 
+      row.map((tile, colIndex) => {
+        const convertedTile = tiles.find(t => t.row === rowIndex && t.col === colIndex);
+        if (convertedTile) {
+          return { 
+            ...tile, 
+            isMatched: true,
+            isAnimating: true 
+          };
+        }
+        return tile;
+      })
+    );
+    
+    // Update board state for explode animation
+    set({ board: explodeBoard });
+    
+    // Start all explode animations
+    for (const animId of destroyAnimIds) {
+      get().startAnimation(animId);
+    }
+    
+    // Wait for explosion animations to complete
+    await get().waitForAllAnimations();
+    
+    // 2. Now set tiles to empty to prepare for fallIn
+    const emptyBoard = explodeBoard.map((row, rowIndex) => 
+      row.map((tile, colIndex) => {
+        const convertedTile = tiles.find(t => t.row === rowIndex && t.col === colIndex);
+        if (convertedTile) {
+          return { 
+            ...tile, 
+            color: 'empty' as Color,
+            isMatched: false,
+            isAnimating: true 
+          };
+        }
+        return tile;
+      })
+    );
+    
+    // Update to empty state
+    set({ board: emptyBoard });
+    
+    // 3. Register fallIn animations
+    const fallInAnimIds = [];
+    for (const { row, col, color } of tiles) {
+      const tileId = `tile-${row}-${col}`;
+      const animId = get().registerAnimation('fallIn', [tileId], { 
+        row, 
+        col, 
+        color: color
+      });
+      fallInAnimIds.push(animId);
+    }
 
-    tiles.forEach(({ row, col, color }) => {
-      board[row][col] = {
-        ...board[row][col],
-        color,
-        isAnimating: true
-      };
-    });
+    // 4. Update the board with the new colors
+    const newBoard = emptyBoard.map((row, rowIndex) => 
+      row.map((tile, colIndex) => {
+        const convertedTile = tiles.find(t => t.row === rowIndex && t.col === colIndex);
+        if (convertedTile) {
+          return { 
+            ...tile, 
+            color: convertedTile.color,
+            isMatched: false,
+            isAnimating: true 
+          };
+        }
+        return tile;
+      })
+    );
 
-    set({ board: [...board] });
-    await get().waitForAnimation();
-    debugLog('BOARD_SLICE', 'Tiles converted');
+    // Update board state with new colors
+    set({ board: newBoard });
+    
+    // Start fallIn animations
+    for (const animId of fallInAnimIds) {
+      get().startAnimation(animId);
+    }
+    
+    // Wait for fallIn animations to complete
+    await get().waitForAllAnimations();
   },
 
   setBoard: (newBoard: Tile[][]) => {
@@ -539,6 +555,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
    */
   hasValidMoves: () => {
     const board = get().board;
+    const BOARD_SIZE = board.length;
     
     // Check horizontal swaps
     for (let row = 0; row < BOARD_SIZE; row++) {
@@ -550,7 +567,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
         tempBoard[row][col + 1] = temp;
         
         // Check if this swap creates a match
-        if (findMatches(tempBoard).length > 0) {
+        if (get().findMatches(tempBoard).length > 0) {
           return true;
         }
       }
@@ -566,7 +583,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
         tempBoard[row + 1][col] = temp;
         
         // Check if this swap creates a match
-        if (findMatches(tempBoard).length > 0) {
+        if (get().findMatches(tempBoard).length > 0) {
           return true;
         }
       }
@@ -574,7 +591,6 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     
     return false;
   },
-
   swapTiles: async (row1: number, col1: number, row2: number, col2: number) => {
     debugLog('BOARD_SLICE', 'Attempting tile swap', { row1, col1, row2, col2 });
     if (!get().wouldCreateMatch(row1, col1, row2, col2)) {
@@ -600,5 +616,4 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     }
     return true;
   },
-
 }); 

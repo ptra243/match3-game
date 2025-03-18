@@ -3,14 +3,16 @@ import { createBoardSlice, BoardSlice } from './slices/boardSlice';
 import { createPlayerSlice, PlayerSlice } from './slices/playerSlice';
 import { createMatchSlice, MatchSlice } from './slices/matchSlice';
 import { createGameSlice, GameSlice } from './slices/gameSlice';
-import { Color, PlayerState, Player } from './types';
+import { createAnimationSlice, AnimationSlice } from './slices/animationSlice';
+import { createEventSlice, EventSlice } from './slices/eventSlice';
+import { Color, PlayerState, Player, GameState } from './types';
 import { CLASSES } from './classes';
 import { ALL_SKILLS } from './skills';
 
-interface GameStore extends BoardSlice, PlayerSlice, MatchSlice, GameSlice {
-  animationInProgress: boolean;
-  signalAnimationComplete: () => void;
+// Combine all slices
+interface GameStore extends GameState {
   waitForNextFrame: () => Promise<void>;
+  resetGame: () => void;
 }
 
 const createInitialPlayerState = (isHuman: boolean = false): PlayerState => {
@@ -34,14 +36,16 @@ export const useGameStore = create<GameStore>()((...args) => {
   const playerSlice = createPlayerSlice(...args);
   const matchSlice = createMatchSlice(...args);
   const gameSlice = createGameSlice(...args);
+  const animationSlice = createAnimationSlice(...args);
+  const eventSlice = createEventSlice(...args);
 
   return {
     ...boardSlice,
     ...playerSlice,
     ...matchSlice,
     ...gameSlice,
-    animationInProgress: false,
-    signalAnimationComplete: () => {},
+    ...animationSlice,
+    ...eventSlice,
     waitForNextFrame: () => new Promise(resolve => {
       requestAnimationFrame(() => resolve());
     }),
@@ -56,7 +60,6 @@ export const useGameStore = create<GameStore>()((...args) => {
         currentMatchSequence: 0,
         currentCombo: 0,
         extraTurnGranted: false,
-        animationInProgress: false,
         board: Array(8).fill(null).map(() => 
           Array(8).fill(null).map(() => ({
             color: 'empty',
@@ -66,7 +69,11 @@ export const useGameStore = create<GameStore>()((...args) => {
             isFrozen: false,
             isIgnited: false
           }))
-        )
+        ),
+        activeAnimations: new Map(),
+        sequences: new Map(),
+        events: new Map(),
+        middleware: []
       });
     }
   };

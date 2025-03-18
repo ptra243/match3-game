@@ -1,4 +1,31 @@
+import { AnimationSlice } from './slices/animationSlice';
+import { GameEventType, EventHandler, EventMiddleware, EventSlice } from './slices/eventSlice';
+import { GameSlice } from './slices/gameSlice';
+import { BoardSlice } from './slices/boardSlice';
+import { PlayerSlice } from './slices/playerSlice';
+import { MatchSlice } from './slices/matchSlice';
+
 export type Color = 'red' | 'green' | 'blue' | 'yellow' | 'black' | 'empty';
+
+export type AnimationType = 'explode' | 'fallIn' | 'swap' | 'bounce';
+
+export interface AnimationInfo {
+  id: string;
+  type: AnimationType;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  elementIds: string[];
+  startTime: number;
+  duration: number;
+  metadata?: Record<string, any>;
+}
+
+export interface AnimationSequence {
+  id: string;
+  animations: AnimationInfo[];
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  onComplete?: () => void;
+  onError?: (error: Error) => void;
+}
 
 export interface Tile {
   color: Color;
@@ -61,54 +88,21 @@ export interface Match {
   length?: number;
 }
 
-export interface GameState {
-  // Animation state
-  animationInProgress: boolean;
-  waitForAnimation: () => Promise<void>;
-  signalAnimationComplete: () => void;
-
-  // Game state
-  isGameOver: boolean;
-  extraTurnGranted: boolean;
-  currentMatchSequence: number;
-  currentCombo: number;
-  setExtraTurn: (granted: boolean) => void;
-  incrementMatchSequence: () => void;
-  resetMatchSequence: () => void;
-  incrementCombo: () => void;
-  resetCombo: () => void;
-
-  // Board state
-  board: Tile[][];
-  setBoard: (newBoard: Tile[][]) => void;
-  initializeBoard: () => void;
-  dropTiles: () => Promise<Tile[][]>;
-  fillEmptyTiles: () => Promise<Tile[][]>;
-  updateTile: (row: number, col: number, tile: Partial<Tile>) => void;
-  processNewBoard: (newBoard: Tile[][]) => Promise<void>;
-  swapTiles: (row1: number, col1: number, row2: number, col2: number) => Promise<boolean>;
-  
-  // Player state
+// Combine all slices into the GameState interface
+export interface GameState extends 
+  AnimationSlice, 
+  EventSlice, 
+  GameSlice, 
+  BoardSlice, 
+  PlayerSlice, 
+  MatchSlice {
+  // Additional state properties
+  activeAnimations: Map<string, AnimationInfo>;
+  sequences: Map<string, AnimationSequence>;
   currentPlayer: Player;
   human: PlayerState;
   ai: PlayerState;
   selectedTile: { row: number; col: number } | null;
-  
-  // Match handling
-  hasValidMoves: () => boolean;
-  findMatches: (board: Tile[][]) => Match[];
-  processMatches: () => Promise<boolean>;
-  wouldCreateMatch: (row1: number, col1: number, row2: number, col2: number) => boolean;
-  markTilesAsMatched: (tiles: { row: number; col: number }[]) => Promise<{ matchedTiles: { row: number; col: number; color: Color }[] }>;
-  markTilesForDestruction: (tiles: { row: number; col: number }[]) => Promise<{ destroyedTiles: { row: number; col: number; color: Color }[] }>;
-  convertTiles: (tiles: { row: number; col: number; color: Color }[]) => Promise<void>;
-  
-  // Player actions
-  switchPlayer: () => void;
-  makeAiMove: () => Promise<void>;
-  useSkill: (row: number, col: number) => Promise<void>;
-  toggleSkill: (player: Player, skillId: string) => void;
-  selectTile: (row: number, col: number) => void;
 }
 
 export interface GameStore extends GameState {

@@ -15,88 +15,70 @@ export interface GameSlice {
   resetMatchSequence: () => void;
   incrementCombo: () => void;
   resetCombo: () => void;
-  animationInProgress: boolean;
-  signalAnimationComplete: () => void;
-  waitForAnimation: () => Promise<void>;
 }
 
-export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set, get) => ({
-  animationInProgress: false,
-  signalAnimationComplete: () => {},
-  waitForAnimation: () => {
-    debugLog('GAME_SLICE', 'Waiting for animation to complete');
-    return new Promise<void>((resolve) => {
-      set({ 
-        animationInProgress: true,
-        signalAnimationComplete: () => {
-          debugLog('GAME_SLICE', 'Animation completed');
-          set({ animationInProgress: false });
-          resolve();
+export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set, get) => {
+  return {
+    resetGame: () => {
+      set({
+        board: Array(BOARD_SIZE).fill(null).map(() => 
+          Array(BOARD_SIZE).fill(null).map(() => ({
+            color: 'empty' as Color,
+            isMatched: false,
+            isNew: false,
+            isAnimating: false,
+            isFrozen: false,
+            isIgnited: false
+          }))
+        ),
+        currentPlayer: 'human',
+        selectedTile: null,
+        isGameOver: false,
+        currentMatchSequence: 0,
+        currentCombo: 0,
+        human: {
+          health: 100,
+          className: '',
+          equippedSkills: [],
+          activeSkillId: null,
+          skillCastCount: {},
+          matchedColors: {
+            red: 0,
+            blue: 0,
+            green: 0,
+            yellow: 0,
+            black: 0,
+            empty: 0
+          },
+          statusEffects: []
+        },
+        ai: {
+          health: 100,
+          className: '',
+          equippedSkills: [],
+          activeSkillId: null,
+          skillCastCount: {},
+          matchedColors: {
+            red: 0,
+            blue: 0,
+            green: 0,
+            yellow: 0,
+            black: 0,
+            empty: 0
+          },
+          statusEffects: []
         }
       });
-    });
-  },
-  resetGame: () => {
-    set({
-      board: Array(BOARD_SIZE).fill(null).map(() => 
-        Array(BOARD_SIZE).fill(null).map(() => ({
-          color: 'empty' as Color,
-          isMatched: false,
-          isNew: false,
-          isAnimating: false,
-          isFrozen: false,
-          isIgnited: false
-        }))
-      ),
-      currentPlayer: 'human',
-      selectedTile: null,
-      isGameOver: false,
-      currentMatchSequence: 0,
-      currentCombo: 0,
-      animationInProgress: false,
-      signalAnimationComplete: () => {},
-      human: {
-        health: 100,
-        className: '',
-        equippedSkills: [],
-        activeSkillId: null,
-        skillCastCount: {},
-        matchedColors: {
-          red: 0,
-          blue: 0,
-          green: 0,
-          yellow: 0,
-          black: 0,
-          empty: 0
-        },
-        statusEffects: []
-      },
-      ai: {
-        health: 100,
-        className: '',
-        equippedSkills: [],
-        activeSkillId: null,
-        skillCastCount: {},
-        matchedColors: {
-          red: 0,
-          blue: 0,
-          green: 0,
-          yellow: 0,
-          black: 0,
-          empty: 0
-        },
-        statusEffects: []
-      }
-    });
-  },
-  isGameOver: false,
-  extraTurnGranted: false,
-  currentMatchSequence: 0,
-  currentCombo: 0,
+    },
+    isGameOver: false,
+    extraTurnGranted: false,
+    currentMatchSequence: 0,
+    currentCombo: 0,
 
-  setExtraTurn: (granted: boolean) => set({ extraTurnGranted: granted }),
-  incrementMatchSequence: () => set(state => ({ currentMatchSequence: state.currentMatchSequence + 1 })),
-  resetMatchSequence: () => set({ currentMatchSequence: 0 }),
-  incrementCombo: () => set(state => ({ currentCombo: state.currentCombo + 1 })),
-  resetCombo: () => set({ currentCombo: 0 })
-}); 
+    setExtraTurn: (granted: boolean) => set({ extraTurnGranted: granted }),
+    incrementMatchSequence: () => set(state => ({ currentMatchSequence: state.currentMatchSequence + 1 })),
+    resetMatchSequence: () => set({ currentMatchSequence: 0 }),
+    incrementCombo: () => set(state => ({ currentCombo: state.currentCombo + 1 })),
+    resetCombo: () => set({ currentCombo: 0 })
+  };
+}; 

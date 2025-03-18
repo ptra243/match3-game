@@ -58,7 +58,7 @@ export const NATURE_WEAVER_SKILLS: ClassSkill[] = [
       state.board = newBoard;
       
       // Wait for explode animation
-      await state.waitForAnimation();
+      await state.waitForAllAnimations();
       
       // Now convert the tiles to green with fallIn animation
       const finalBoard = newBoard.map(row => row.map(tile => 
@@ -78,7 +78,7 @@ export const NATURE_WEAVER_SKILLS: ClassSkill[] = [
       currentPlayer.skillCastCount['fertile_ground'] = castCount + 1;
 
       // Wait for fall animation
-      await state.waitForAnimation();
+      await state.waitForAllAnimations();
       
       // Process any matches that might have formed
       await state.processNewBoard(finalBoard);
@@ -123,7 +123,7 @@ export const NATURE_WEAVER_SKILLS: ClassSkill[] = [
       state.board = newBoard;
       
       // Wait for explode animation
-      await state.waitForAnimation();
+      await state.waitForAllAnimations();
       
       // Now convert to alternating pattern with fallIn animation
       for (let i = 0; i < 2; i++) {
@@ -142,7 +142,7 @@ export const NATURE_WEAVER_SKILLS: ClassSkill[] = [
       state.board = newBoard;
       
       // Wait for fall animation
-      await state.waitForAnimation();
+      await state.waitForAllAnimations();
       
       // Process any matches that might have formed
       await state.processNewBoard(newBoard);
@@ -179,7 +179,7 @@ export const ALCHEMIST_SKILLS: ClassSkill[] = [
       state.board = newBoard;
       
       // Wait for explode animation
-      await state.waitForAnimation();
+      await state.waitForAllAnimations();
       
       // Now convert to new color with fallIn animation
       const finalBoard = newBoard.map(r => 
@@ -198,7 +198,7 @@ export const ALCHEMIST_SKILLS: ClassSkill[] = [
       state.board = finalBoard;
       
       // Wait for fall animation
-      await state.waitForAnimation();
+      await state.waitForAllAnimations();
       
       // Process any matches that might have formed
       await state.processNewBoard(finalBoard);
