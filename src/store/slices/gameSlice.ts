@@ -50,7 +50,23 @@ export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set,
             black: 0,
             empty: 0
           },
-          statusEffects: []
+          statusEffects: [],
+          defense: 0,
+          colorStats: {
+            red: 0,
+            blue: 0,
+            green: 0,
+            yellow: 0,
+            black: 0,
+            empty: 0
+          },
+          equippedItems: {
+            weapon: null,
+            armor: null,
+            accessory: null,
+            trinket: null
+          },
+          inventory: []
         },
         ai: {
           health: 100,
@@ -66,7 +82,23 @@ export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set,
             black: 0,
             empty: 0
           },
-          statusEffects: []
+          statusEffects: [],
+          defense: 0,
+          colorStats: {
+            red: 0,
+            blue: 0,
+            green: 0,
+            yellow: 0,
+            black: 0,
+            empty: 0
+          },
+          equippedItems: {
+            weapon: null,
+            armor: null,
+            accessory: null,
+            trinket: null
+          },
+          inventory: []
         }
       });
     },

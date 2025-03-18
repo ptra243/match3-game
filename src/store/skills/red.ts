@@ -39,53 +39,46 @@ export const PYROMANCER_SKILLS: ClassSkill[] = [
     secondaryColor: 'yellow',
     targetColor: 'red',
     requiresTarget: true,
-    effect: async (state, row, col) => {
-      console.log('Fireball effect called:', { row, col });
-      if (row === undefined || col === undefined) {
-        toast.error('Must select a valid tile!');
-        return;
-      }
-      if (state.board[row][col].color !== 'red') {
-        toast.error('Must target a red tile!');
-        return;
-      }
-
-      const board = state.board;
-      let tilesToDestroy = [];
+    effect: async (state, row?: number, col?: number) => {
+      if (row === undefined || col === undefined) return;
 
       // Mark tiles for explosion in a diamond pattern
-      for (let i = Math.max(0, row - 2); i <= Math.min(board.length - 1, row + 2); i++) {
-        for (let j = Math.max(0, col - 2); j <= Math.min(board[0].length - 1, col + 2); j++) {
-          // Calculate Manhattan distance
-          const distance = Math.abs(i - row) + Math.abs(j - col);
+      const tilesToMark = [];
+      for (let r = 0; r < state.board.length; r++) {
+        for (let c = 0; c < state.board[0].length; c++) {
+          const distance = Math.abs(r - row) + Math.abs(c - col);
           if (distance <= 2) {
-            tilesToDestroy.push({ row: i, col: j });
-            console.log(`Adding tile to destroy at [${i},${j}] with distance ${distance} from center [${row},${col}]`, {
-              currentTileState: board[i][j]
-            });
+            tilesToMark.push({ row: r, col: c });
           }
         }
       }
 
-      const { destroyedTiles } = await state.markTilesForDestruction(tilesToDestroy);
-    
-      // Count red tiles and apply damage
-      const redTiles = destroyedTiles.filter(t => t.color === 'red').length;
-      const damage = redTiles * 5; // 5 damage per red tile
-
-      // Update opponent's health
-      const opponent = state.currentPlayer === 'human' ? 'ai' : 'human';
-      state[opponent].health = Math.max(0, state[opponent].health - damage);
-
-      // Add resources from destroyed tiles
-      const currentPlayer = state[state.currentPlayer];
-      destroyedTiles.forEach(tile => {
-        if (tile.color !== 'empty') {
-          currentPlayer.matchedColors[tile.color]++;
-        }
+      // Mark all tiles in the pattern
+      tilesToMark.forEach(tile => {
+        state.board[tile.row][tile.col].isAnimating = true;
       });
 
-      toast.success(`Fireball destroyed ${destroyedTiles.length} tiles and dealt ${damage} damage!`);
+      // Count red tiles destroyed and calculate damage
+      const redTilesCount = tilesToMark.filter(
+        tile => state.board[tile.row][tile.col].color === 'red'
+      ).length;
+      const damage = redTilesCount * 5;
+
+      const currentPlayer = state.currentPlayer;
+      const opponent = currentPlayer === 'human' ? 'ai' : 'human';
+
+      // Apply damage using takeDamage with isSkillDamage=true
+      // This allows for blessings and items with skillDamageMultiplier to affect the damage
+      const actualDamage = state.takeDamage(currentPlayer, opponent, damage, true, true);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Clear exploding status
+      tilesToMark.forEach(tile => {
+        state.board[tile.row][tile.col].isAnimating = false;
+      });
+
+      toast.success(`Fireball deals ${actualDamage} damage!`);
     }
   }
 ];
@@ -102,7 +95,12 @@ export const BLOOD_MAGE_SKILLS: ClassSkill[] = [
     requiresTarget: false,
     effect: async (state) => {
       const player = state.currentPlayer;
-      state[player].health = Math.max(1, state[player].health - 5);
+      
+      // Apply self-damage - this is not direct damage since it's self-inflicted
+      // But it is skill damage, so we use isSkillDamage=true to allow skill damage modifiers
+      state.takeDamage(player, player, 5, false, true);
+      
+      // Add damage multiplier effect
       state[player].statusEffects.push({
         damageMultiplier: 2.5,
         resourceMultiplier: 1,

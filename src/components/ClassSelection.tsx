@@ -2,6 +2,7 @@ import React from 'react';
 import { CLASSES } from '../store/classes';
 import { useGameStore } from '../store/gameStore';
 import { ALL_SKILLS } from '../store/skills';
+import { ALL_ITEMS } from '../store/items';
 
 interface ClassSelectionProps {
   onClassSelected: () => void;
@@ -10,6 +11,8 @@ interface ClassSelectionProps {
 export const ClassSelection: React.FC<ClassSelectionProps> = ({ onClassSelected }) => {
   const { selectClass, initializeBoard, resetGame, waitForNextFrame } = useGameStore();
   const [selectedClass, setSelectedClass] = React.useState<string | null>(null);
+  const addItemToInventory = useGameStore(state => state.addItemToInventory);
+  const equipItem = useGameStore(state => state.equipItem);
 
   const handleClassSelect = (className: string) => {
     setSelectedClass(className);
@@ -23,8 +26,10 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onClassSelected 
       // Wait for state update
       await waitForNextFrame();
       
-      // Then select classes
-      selectClass('human', selectedClass);
+      // Select class and give starter items to player
+      onSelectClass(selectedClass);
+      
+      // Select AI class
       selectClass('ai', Object.keys(CLASSES).find(c => c !== selectedClass) || 'shadowPriest');
       
       // Wait for state update
@@ -40,6 +45,11 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onClassSelected 
       console.log('ClassSelection - Game started');
       onClassSelected();
     }
+  };
+
+  const onSelectClass = (classId: string) => {
+    selectClass('human', classId);
+    
   };
 
   return (

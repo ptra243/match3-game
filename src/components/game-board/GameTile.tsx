@@ -62,14 +62,16 @@ export const GameTile: React.FC<GameTileProps> = ({
       tileState: tile
     });
 
+    // Notify the animation system that this animation is complete
     completeAnimation(currentAnimation.id);
 
+    // Update tile state based on animation type
     if (currentAnimation.type === 'explode') {
       updateTile(row, col, {
         color: 'empty',
         isMatched: false,
         isNew: false,
-        isAnimating: true // Keep animating for the fall animation
+        isAnimating: false // Stop animating after explosion
       });
     } else if (currentAnimation.type === 'fallIn') {
       updateTile(row, col, {

@@ -12,16 +12,17 @@ export default {
           '100%': { transform: 'scale(1.5)', opacity: '0' }
         },
         fallIn: {
-          '0%': { transform: 'translateY(-100px)', opacity: '0.3' },
-          '20%': { transform: 'translateY(-80px)', opacity: '0.5' },
-          '50%': { transform: 'translateY(-40px)', opacity: '0.7' },
-          '80%': { transform: 'translateY(-10px)', opacity: '0.9' },
+          '0%': { transform: 'translateY(-150px)', opacity: '0.2' },
+          '20%': { transform: 'translateY(-120px)', opacity: '0.4' },
+          '40%': { transform: 'translateY(-90px)', opacity: '0.6' },
+          '60%': { transform: 'translateY(-60px)', opacity: '0.7' },
+          '80%': { transform: 'translateY(-30px)', opacity: '0.9' },
           '100%': { transform: 'translateY(0)', opacity: '1' }
         }
       },
       animation: {
         'explode': 'explode 0.3s ease-in-out forwards',
-        'fallIn': 'fallIn 0.6s ease-in-out forwards'
+        'fallIn': 'fallIn 0.5s ease-in-out forwards'
       }
     },
   },

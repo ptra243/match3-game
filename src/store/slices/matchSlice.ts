@@ -1,11 +1,13 @@
 import { StateCreator } from 'zustand';
-import { GameState, Color, Match as TileMatch, Tile } from '../types';
+import { GameState, Color, Match as TileMatch, Tile, Item } from '../types';
 import { toast } from 'react-hot-toast';
 import { CLASSES } from '../classes';
 import { GAME_CONSTANTS, MATCH_RULES, EXTRA_TURN_CONDITIONS } from '../gameRules';
+import { ALL_ITEMS } from '../items';
 
 // Import debug configuration
 import { debugLog } from '../slices/debug';
+import { DamageEventPayload } from './eventSlice';
 
 interface Match {
   color: Color;
@@ -255,8 +257,9 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
   },
 
   processMatches: async () => {
+    const { board, currentPlayer } = get();
+    
     debugLog('MATCH_SLICE', 'Processing matches');
-    const board = get().board;
     
     // Find all matches on the board
     const matches = get().findMatches(board);
@@ -293,6 +296,7 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
           if (EXTRA_TURN_CONDITIONS.SPECIAL_SHAPES.includes(match.isSpecialShape as 'T' | 'L')) {
             get().setExtraTurn(true);
             toast.success('Special match! Extra turn granted!');
+            debugLog('MATCH_SLICE', 'Special match!', match);
           }
         }
         
@@ -310,21 +314,30 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
       await get().markTilesAsMatched(matched);
       
       // Calculate and apply damage
-      const currentPlayer = get().currentPlayer;
+      const opponent = currentPlayer === 'human' ? 'ai' : 'human';
       let totalDamage = 0;
       
-      // Calculate damage based on matched colors
-      const characterClass = CLASSES[get()[currentPlayer].className];
-      const calculateMatchDamage = (match: Match, isPrimary: boolean, isSecondary: boolean) => {
-        // Base damage calculation
-        let baseDamage = match.tiles.length;
+      // Calculate damage based on player's color stats
+      const calculateMatchDamage = (match: Match) => {
+        const color = match.color;
+        const colorStat = get()[currentPlayer].colorStats[color] || 0;
+        const matchLength = match.tiles.length;
         
-        // Bonus for primary/secondary colors
-        if (isPrimary) baseDamage *= MATCH_RULES.DAMAGE_CALCULATION.COLOR_MULTIPLIERS.PRIMARY;
-        else if (isSecondary) baseDamage *= MATCH_RULES.DAMAGE_CALCULATION.COLOR_MULTIPLIERS.SECONDARY;
+        // Base damage = colorStat × (number of tiles ÷ 3, rounded up)
+        // This makes damage more balanced, requiring 3 tiles per colorStat damage
+        let baseDamage = colorStat * Math.ceil(matchLength / 3);
         
-        // Bonus for special shapes
-        if (match.isSpecialShape) baseDamage *= 1.5; // Special shape multiplier
+        // Length multiplier for 4 and 5-tile matches
+        if (matchLength === 4) {
+          baseDamage *= 1.5; // 1.5x multiplier for 4-tile matches
+        } else if (matchLength >= 5) {
+          baseDamage *= 2; // 2x multiplier for 5-tile matches
+        }
+        
+        // Special shape multiplier (1.5x for special shapes)
+        if (match.isSpecialShape) {
+          baseDamage *= 1.5;
+        }
         
         // Combo multiplier
         const comboCount = get().currentCombo;
@@ -337,39 +350,68 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
       
       // Calculate damage for each match
       matches.forEach(match => {
-        const isPrimaryColor = characterClass.primaryColor === match.color;
-        const isSecondaryColor = characterClass.secondaryColor === match.color;
-        const damage = calculateMatchDamage(match, isPrimaryColor, isSecondaryColor);
+        const damage = calculateMatchDamage(match);
         debugLog('MATCH_SLICE', 'Calculated damage for match', {
           match,
-          isPrimaryColor,
-          isSecondaryColor,
-          damage,
-          characterClass
+          colorStat: get()[currentPlayer].colorStats[match.color],
+          damage
         });
         totalDamage += damage;
+        
+        // Trigger onMatch effects for items
+        const player = get()[currentPlayer];
+        Object.values(player.equippedItems).forEach(item => {
+          if (item) {
+            item.effects.forEach(effect => {
+              if (effect.onMatch) {
+                effect.onMatch(get(), match.color);
+              }
+            });
+          }
+        });
       });
 
-      const opponent = currentPlayer === 'human' ? 'ai' : 'human';
-      const playerDamageMultiplier = get()[currentPlayer].statusEffects.reduce(
-        (multiplier, effect) => multiplier * (effect.damageMultiplier || 1), 1
-      );
-      const opponentDamageMultiplier = get()[opponent].statusEffects.reduce(
-        (multiplier, effect) => multiplier * (effect.damageMultiplier || 1), 1
-      );
-      
-      totalDamage = Math.round(totalDamage * playerDamageMultiplier * opponentDamageMultiplier);
-      
+      // Apply damage using the new takeDamage function
+      // Match damage is direct damage
       if (totalDamage > 0) {
-        set(state => ({
-          [opponent]: {
-            ...state[opponent],
-            health: Math.max(0, state[opponent].health - totalDamage)
-          }
-        }));
-        toast.success(`Dealt ${totalDamage} damage to opponent!`);
+        get().takeDamage(currentPlayer, opponent, totalDamage, true);
       }
-
+      
+      // Add matched resources to the current player
+      const resourceMultiplier = get()[currentPlayer].statusEffects.reduce(
+        (multiplier, effect) => multiplier * (effect.resourceMultiplier || 1), 1
+      );
+      
+      // Apply resource conversion effect if present
+      const conversionEffect = get()[currentPlayer].statusEffects.find(effect => effect.manaConversion);
+      
+      // Update player's matched colors (resources)
+      set(state => {
+        const updatedMatchedColors = { ...state[currentPlayer].matchedColors };
+        
+        // Process each matched color
+        Object.entries(matchedColors).forEach(([color, count]) => {
+          if (color === 'empty') return;
+          
+          let resourceColor = color as Color;
+          let resourceCount = Math.round(count * resourceMultiplier);
+          
+          // Apply conversion if applicable
+          if (conversionEffect?.manaConversion && conversionEffect.manaConversion.from === color) {
+            resourceColor = conversionEffect.manaConversion.to as Color;
+          }
+          
+          updatedMatchedColors[resourceColor] = (updatedMatchedColors[resourceColor] || 0) + resourceCount;
+        });
+        
+        return {
+          [currentPlayer]: {
+            ...state[currentPlayer],
+            matchedColors: updatedMatchedColors
+          }
+        };
+      });
+      
       // Emit match event
       if (get().emit) {
         get().emit('OnMatch', {
@@ -379,6 +421,61 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
           isSpecialShape: hasSpecialMatch
         });
       }
+      
+      // Check if we should offer an item reward
+      const checkOfferItemReward = () => {
+        const currentPlayer = get().currentPlayer;
+        
+        // Only offer rewards to human player, not AI
+        if (currentPlayer === 'ai') return;
+        
+        // Offer reward with 15% chance after a match
+        if (Math.random() > 0.15) return;
+        
+        // Get colors not used by either player as primary or secondary
+        const humanClass = CLASSES[get().human.className];
+        const aiClass = CLASSES[get().ai.className];
+        const usedColors = [
+          humanClass.primaryColor, 
+          humanClass.secondaryColor, 
+          aiClass.primaryColor, 
+          aiClass.secondaryColor
+        ];
+        
+        const availableColors = ['red', 'blue', 'green', 'yellow', 'black'].filter(
+          color => !usedColors.includes(color as Color)
+        ) as Color[];
+        
+        // If no colors available, use a random color
+        const costColor = availableColors.length > 0 
+          ? availableColors[Math.floor(Math.random() * availableColors.length)] 
+          : ['red', 'blue', 'green', 'yellow', 'black'][Math.floor(Math.random() * 5)] as Color;
+        
+        // Set cost based on match sequence or combo
+        const costAmount = Math.max(3, Math.min(8, get().currentCombo * 2));
+        
+        // Generate reward options - one of each rarity
+        const commonItems = Object.values(ALL_ITEMS).filter(item => item.rarity === 'common');
+        const uncommonItems = Object.values(ALL_ITEMS).filter(item => item.rarity === 'uncommon');
+        const rareItems = Object.values(ALL_ITEMS).filter(item => item.rarity === 'rare');
+        
+        // Randomly select one item from each rarity
+        const options = [
+          commonItems[Math.floor(Math.random() * commonItems.length)],
+          uncommonItems[Math.floor(Math.random() * uncommonItems.length)],
+          rareItems[Math.floor(Math.random() * rareItems.length)]
+        ].map(item => item.id);
+        
+        // Offer the reward
+        get().setItemReward(options, { color: costColor, amount: costAmount });
+      };
+      
+      checkOfferItemReward();
+      
+      const deadTiles = matched.map(tile => ({ row: tile.row, col: tile.col }));
+      debugLog('MATCH_SLICE', 'Matches processed, calculating fall-in', {
+        deadTiles: deadTiles.length
+      });
     }
 
     return hasMatches;

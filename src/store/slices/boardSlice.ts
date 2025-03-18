@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { GameState, Tile, Color } from '../types';
 import { debugLog } from '../slices/debug';
 import { GAME_CONSTANTS, GAME_FLOW, EXTRA_TURN_CONDITIONS } from '../gameRules';
+import { MatchEventPayload } from './eventSlice';
 
 const BOARD_SIZE = GAME_CONSTANTS.BOARD_SIZE;
 const COLORS = GAME_CONSTANTS.AVAILABLE_COLORS;
@@ -134,19 +135,36 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     const board = get().board;
     const newBoard = board.map(row => [...row]);
     let hasDropped = false;
+    const dropAnimations = [];
 
-    // Drop tiles down to fill empty spaces
+    // First, identify all drops
+    const drops = [];
     for (let col = 0; col < BOARD_SIZE; col++) {
       for (let row = BOARD_SIZE - 1; row >= 0; row--) {
         if (newBoard[row][col].color === 'empty') {
           // Find the next non-empty tile above
           let sourceRow = row - 1;
-          while (sourceRow >= 0 && newBoard[sourceRow][col].color === 'empty' && newBoard[sourceRow][col].isFrozen === false) {
+          while (sourceRow >= 0 && 
+                (newBoard[sourceRow][col].color === 'empty' || 
+                 newBoard[sourceRow][col].isFrozen)) {
             sourceRow--;
           }
           if (sourceRow >= 0) {
-            // Drop the tile down
-            newBoard[row][col] = { ...newBoard[sourceRow][col], isAnimating: true };
+            // Record this drop
+            drops.push({
+              fromRow: sourceRow,
+              fromCol: col,
+              toRow: row,
+              toCol: col,
+              color: newBoard[sourceRow][col].color
+            });
+            
+            // Drop the tile down in our data model
+            newBoard[row][col] = { 
+              ...newBoard[sourceRow][col], 
+              isAnimating: true,
+              isNew: false
+            };
             newBoard[sourceRow][col] = createEmptyTile();
             hasDropped = true;
           }
@@ -154,11 +172,32 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       }
     }
 
+    // Update the board immediately with the new positions
     if (hasDropped) {
-      debugLog('BOARD_SLICE', 'Tiles dropped, updating board');
+      debugLog('BOARD_SLICE', 'Tiles dropped, updating board and registering animations', { drops });
       get().setBoard(newBoard);
-      // Wait for the drop animation to complete
-      await get().waitForAllAnimations();
+      
+      // Register and start fall animations for dropped tiles
+      for (const drop of drops) {
+        const tileId = `tile-${drop.toRow}-${drop.toCol}`;
+        const animId = get().registerAnimation('fallIn', [tileId], { 
+          fromRow: drop.fromRow,
+          toRow: drop.toRow,
+          col: drop.toCol,
+          color: drop.color
+        });
+        dropAnimations.push(animId);
+      }
+      
+      // Start the animations
+      for (const animId of dropAnimations) {
+        get().startAnimation(animId);
+      }
+      
+      // Wait for all drop animations to complete
+      if (dropAnimations.length > 0) {
+        await get().waitForAllAnimations();
+      }
     }
 
     return newBoard;
@@ -397,6 +436,9 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     const board = get().board;
     const matchedTiles: { row: number; col: number; color: Color }[] = [];
 
+    // Clear the selected tile to prevent interference with animations
+    set({ selectedTile: null });
+
     // 1. Create animation sequence for matched tiles
     const sequenceId = `match-sequence-${Date.now()}`;
     const animationIds = [];
@@ -410,6 +452,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
         color: board[row][col].color 
       });
       animationIds.push(animId);
+    
     }
 
     // 2. Mark tiles as matched in the board state

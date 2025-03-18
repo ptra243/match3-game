@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { Color, Player } from '../store/types';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
@@ -36,10 +36,27 @@ const DamageTooltip: React.FC<DamageTooltipProps> = ({ color, isPrimary }) => {
 };
 
 export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const { human, ai, currentPlayer, toggleSkill, useSkill } = useGameStore();
   const playerState = player === 'human' ? human : ai;
   const isCurrentPlayer = currentPlayer === player;
   const characterClass = CLASSES[playerState.className];
+
+  // Auto-collapse on small screens initially
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setIsCollapsed(true);
+      }
+    };
+    
+    // Set initial state
+    handleResize();
+    
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const colorClasses: Record<Color, string> = {
     red: 'bg-red-500',
@@ -70,6 +87,11 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
         console.log('Using non-targeted skill:', skillId);
         useSkill(0, 0);
       }
+      
+      // Collapse sidebar on mobile after selecting a skill
+      if (window.innerWidth < 768) {
+        setIsCollapsed(true);
+      }
     }
   };
 
@@ -88,136 +110,177 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
     return isReady;
   };
 
+  const toggleCollapse = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
   return (
-    <div className={`w-64 p-4 bg-gray-800 rounded-lg ${position === 'left' ? 'mr-4' : 'ml-4'}`}>
-      <div className="flex items-center mb-6">
-        <UserCircleIcon className="w-12 h-12 text-gray-300" />
-        <div className="ml-3">
-          <h2 className="text-xl font-bold text-white capitalize">{characterClass.name}</h2>
-          {isCurrentPlayer && (
-            <span className="text-sm text-green-400">Current Turn</span>
-          )}
-        </div>
-      </div>
+    <div className={`relative bg-gray-800 rounded-lg md:w-64 transition-all duration-300 ease-in-out
+      ${position === 'left' ? 'md:mr-4' : 'md:ml-4'}
+      ${isCollapsed ? 'w-12 h-12 m-2' : 'w-full md:w-64 p-4 m-2 md:m-0'}`}
+    >
+      {/* Toggle Button (only visible on mobile) */}
+      <button 
+        onClick={toggleCollapse}
+        className={`absolute ${position === 'left' ? 'right-2' : 'left-2'} top-2 md:hidden z-10
+          w-8 h-8 flex items-center justify-center bg-gray-700 rounded-full text-white`}
+      >
+        {isCollapsed ? 
+          (player === 'human' ? '👤' : '🤖') : 
+          '✕'
+        }
+      </button>
 
-      {/* Class Colors */}
-      <div className="mb-4">
-        <h3 className="text-gray-300 mb-2">Class Colors</h3>
-        <div className="flex space-x-4">
-          <div className="group relative">
-            <div className={`w-8 h-8 rounded-lg ${colorClasses[characterClass.primaryColor]} flex items-center justify-center`}>
-              <TileIcon color={characterClass.primaryColor} />
-            </div>
-            <DamageTooltip color={characterClass.primaryColor} isPrimary={true} />
+      {/* Sidebar Content - Only shown when not collapsed */}
+      <div className={`${isCollapsed ? 'hidden' : 'block'}`}>
+        <div className="flex items-center mb-6">
+          <UserCircleIcon className="w-12 h-12 text-gray-300" />
+          <div className="ml-3">
+            <h2 className="text-xl font-bold text-white capitalize">{characterClass.name}</h2>
+            {isCurrentPlayer && (
+              <span className="text-sm text-green-400">Current Turn</span>
+            )}
           </div>
-          <div className="group relative">
-            <div className={`w-8 h-8 rounded-lg ${colorClasses[characterClass.secondaryColor]} flex items-center justify-center`}>
-              <TileIcon color={characterClass.secondaryColor} />
-            </div>
-            <DamageTooltip color={characterClass.secondaryColor} isPrimary={false} />
-          </div>
         </div>
-      </div>
 
-      {/* Health Bar */}
-      <div className="mb-6">
-        <div className="flex justify-between mb-1">
-          <span className="text-sm text-gray-300">Health</span>
-          <span className="text-sm text-gray-300">{playerState.health}/100</span>
-        </div>
-        <div className="w-full h-4 bg-gray-700 rounded-full">
-          <div
-            className="h-full bg-green-500 rounded-full transition-all duration-300"
-            style={{ width: `${playerState.health}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Matched Colors */}
-      <div className="mb-6">
-        <h3 className="text-gray-300 mb-2">Resources</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {Object.entries(playerState.matchedColors).map(([color, count]) => (
-            color !== 'empty' && (
-              <div key={color} className="flex items-center">
-                <div className={`w-8 h-8 rounded-lg ${colorClasses[color as Color]} flex items-center justify-center`}>
-                  <TileIcon color={color as Color} />
-                </div>
-                <span className="ml-2 text-gray-300">
-                  {count}
-                </span>
+        {/* Class Colors */}
+        <div className="mb-4">
+          <h3 className="text-gray-300 mb-2">Class Colors</h3>
+          <div className="flex space-x-4">
+            <div className="group relative">
+              <div className={`w-8 h-8 rounded-lg ${colorClasses[characterClass.primaryColor]} flex items-center justify-center`}>
+                <TileIcon color={characterClass.primaryColor} />
               </div>
-            )
-          ))}
-        </div>
-      </div>
-
-      {/* Skills */}
-      <div>
-        <h3 className="text-gray-300 mb-2">Skills</h3>
-        <div className="space-y-2">
-          {playerState.equippedSkills.map((skillId) => {
-            const skill = ALL_SKILLS[skillId];
-            if (!skill) return null;
-            
-            return (
-              <button
-                key={skill.id}
-                onClick={() => handleSkillClick(skill.id)}
-                disabled={!isCurrentPlayer || !isSkillReady(skill.id)}
-                className={`w-full p-3 rounded-lg transition-colors duration-200 text-left
-                  ${isCurrentPlayer && isSkillReady(skill.id)
-                    ? playerState.activeSkillId === skill.id
-                      ? 'bg-yellow-600 hover:bg-yellow-700'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-gray-700'} 
-                  ${!isCurrentPlayer || !isSkillReady(skill.id) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-              >
-                <h4 className="font-medium text-white">{skill.name}</h4>
-                <p className="text-xs text-gray-300">{skill.description}</p>
-                <div className="flex mt-2 space-x-1">
-                  {Object.entries(skill.cost).map(([color, cost]) => {
-                    const castCount = playerState.skillCastCount[skill.id] || 0;
-                    const actualCost = skill.id === 'fertile_ground' ? (cost || 0) + castCount : (cost || 0);
-                    return (
-                      <div 
-                        key={color} 
-                        className={`${colorClasses[color as Color]} px-2 py-1 rounded text-xs text-white flex items-center`}
-                      >
-                        <span>{actualCost}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Status Effects */}
-      <div className="mt-4">
-        <h3 className="text-gray-300 mb-2">Status Effects</h3>
-        <div className="space-y-2">
-          {playerState.statusEffects.map((effect, index) => (
-            <div key={index} className="text-sm text-gray-300">
-              {effect.damageMultiplier !== 1 && (
-                <p>Damage x{effect.damageMultiplier} ({effect.turnsRemaining} turns)</p>
-              )}
-              {effect.resourceMultiplier !== 1 && (
-                <p>Resources x{effect.resourceMultiplier} ({effect.turnsRemaining} turns)</p>
-              )}
-              {effect.manaConversion && (
-                <p>Converting {effect.manaConversion.from} to {effect.manaConversion.to} ({effect.turnsRemaining} turns)</p>
-              )}
-              {effect.convertTiles && (
-                <p>Converting {effect.convertTiles.count} tiles to {effect.convertTiles.color} next match</p>
-              )}
-              {effect.extraTurn && (
-                <p>Extra turn next round!</p>
-              )}
+              <DamageTooltip color={characterClass.primaryColor} isPrimary={true} />
             </div>
-          ))}
+            <div className="group relative">
+              <div className={`w-8 h-8 rounded-lg ${colorClasses[characterClass.secondaryColor]} flex items-center justify-center`}>
+                <TileIcon color={characterClass.secondaryColor} />
+              </div>
+              <DamageTooltip color={characterClass.secondaryColor} isPrimary={false} />
+            </div>
+          </div>
+        </div>
+
+        {/* Health Bar */}
+        <div className="mb-6">
+          <div className="flex justify-between mb-1">
+            <span className="text-sm text-gray-300">Health</span>
+            <span className="text-sm text-gray-300">{playerState.health}/100</span>
+          </div>
+          <div className="w-full h-4 bg-gray-700 rounded-full">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all duration-300"
+              style={{ width: `${playerState.health}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Damage Stats */}
+        <div className="mb-6">
+          <h3 className="text-gray-300 mb-2">Damage Stats</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(playerState.colorStats).map(([color, value]) => (
+              color !== 'empty' && value > 0 && (
+                <div key={`stat-${color}`} className="flex items-center">
+                  <div className={`w-8 h-8 rounded-lg ${colorClasses[color as Color]} flex items-center justify-center`}>
+                    <TileIcon color={color as Color} />
+                  </div>
+                  <span className="ml-2 text-gray-300">
+                    {value}
+                  </span>
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+
+        {/* Matched Colors */}
+        <div className="mb-6">
+          <h3 className="text-gray-300 mb-2">Resources</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(playerState.matchedColors).map(([color, count]) => (
+              color !== 'empty' && (
+                <div key={color} className="flex items-center">
+                  <div className={`w-8 h-8 rounded-lg ${colorClasses[color as Color]} flex items-center justify-center`}>
+                    <TileIcon color={color as Color} />
+                  </div>
+                  <span className="ml-2 text-gray-300">
+                    {count}
+                  </span>
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+
+        {/* Skills */}
+        <div>
+          <h3 className="text-gray-300 mb-2">Skills</h3>
+          <div className="space-y-2">
+            {playerState.equippedSkills.map((skillId) => {
+              const skill = ALL_SKILLS[skillId];
+              if (!skill) return null;
+              
+              return (
+                <button
+                  key={skill.id}
+                  onClick={() => handleSkillClick(skill.id)}
+                  disabled={!isCurrentPlayer || !isSkillReady(skill.id)}
+                  className={`w-full p-3 rounded-lg transition-colors duration-200 text-left
+                    ${isCurrentPlayer && isSkillReady(skill.id)
+                      ? playerState.activeSkillId === skill.id
+                        ? 'bg-yellow-600 hover:bg-yellow-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-gray-700'} 
+                    ${!isCurrentPlayer || !isSkillReady(skill.id) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                >
+                  <h4 className="font-medium text-white">{skill.name}</h4>
+                  <p className="text-xs text-gray-300">{skill.description}</p>
+                  <div className="flex mt-2 space-x-1">
+                    {Object.entries(skill.cost).map(([color, cost]) => {
+                      const castCount = playerState.skillCastCount[skill.id] || 0;
+                      const actualCost = skill.id === 'fertile_ground' ? (cost || 0) + castCount : (cost || 0);
+                      return (
+                        <div 
+                          key={color} 
+                          className={`${colorClasses[color as Color]} px-2 py-1 rounded text-xs text-white flex items-center`}
+                        >
+                          <span>{actualCost}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Status Effects */}
+        <div className="mt-4">
+          <h3 className="text-gray-300 mb-2">Status Effects</h3>
+          <div className="space-y-2">
+            {playerState.statusEffects.map((effect, index) => (
+              <div key={index} className="text-sm text-gray-300">
+                {effect.damageMultiplier !== 1 && (
+                  <p>Damage x{effect.damageMultiplier} ({effect.turnsRemaining} turns)</p>
+                )}
+                {effect.resourceMultiplier !== 1 && (
+                  <p>Resources x{effect.resourceMultiplier} ({effect.turnsRemaining} turns)</p>
+                )}
+                {effect.manaConversion && (
+                  <p>Converting {effect.manaConversion.from} to {effect.manaConversion.to} ({effect.turnsRemaining} turns)</p>
+                )}
+                {effect.convertTiles && (
+                  <p>Converting {effect.convertTiles.count} tiles to {effect.convertTiles.color} next match</p>
+                )}
+                {effect.extraTurn && (
+                  <p>Extra turn next round!</p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

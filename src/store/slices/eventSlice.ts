@@ -19,7 +19,7 @@ export interface DamageEventPayload {
   amount: number;
   source: 'human' | 'ai';
   target: 'human' | 'ai';
-  damageType?: 'normal' | 'special' | 'crit' | 'indirect';
+  damageType?: 'normal' | 'special' | 'crit' | 'indirect' | 'skill';
 }
 
 export interface TurnEventPayload {

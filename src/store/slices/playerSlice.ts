@@ -1,8 +1,10 @@
 import { StateCreator } from 'zustand';
-import { GameState, PlayerState, Player, Color, Tile } from '../types';
+import { GameState, PlayerState, Player, Color, Tile, Item } from '../types';
 import { toast } from 'react-hot-toast';
 import { CLASSES } from '../classes';
 import { ALL_SKILLS, ClassSkill } from '../skills';
+import { debugLog } from '../slices/debug';
+import { ALL_ITEMS } from '../items';
 
 export interface PlayerSlice {
   human: PlayerState;
@@ -17,14 +19,40 @@ export interface PlayerSlice {
   makeAiMove: () => Promise<void>;
   selectClass: (player: Player, className: string) => void;
   equipSkill: (player: Player, skillId: string, slotIndex: number) => void;
+  
+  // Updated damage function signature
+  takeDamage: (attacker: Player, defender: Player, damageAmount: number, isDirectDamage: boolean, isSkillDamage?: boolean) => number;
+  
+  // Item management functions
+  equipItem: (player: Player, itemId: string) => void;
+  unequipItem: (player: Player, slot: 'weapon' | 'armor' | 'accessory' | 'trinket') => void;
+  addItemToInventory: (player: Player, itemId: string) => void;
+  removeItemFromInventory: (player: Player, itemId: string) => void;
+  calculatePlayerStats: (player: Player) => void;
 }
 
-const createInitialPlayerState = (isHuman: boolean = false): PlayerState => {
+export const createInitialPlayerState = (isHuman: boolean = false): PlayerState => {
   const className = isHuman ? 'pyromancer' : 'shadowPriest';
   const defaultSkills = CLASSES[className].defaultSkills;
+  const characterClass = CLASSES[className];
+  
+  // Initialize color stats based on character class
+  const colorStats: Record<Color, number> = {
+    red: 0,
+    green: 0,
+    blue: 0,
+    yellow: 0,
+    black: 0,
+    empty: 0
+  };
+  
+  // Set primary and secondary color stats
+  colorStats[characterClass.primaryColor] = 3;
+  colorStats[characterClass.secondaryColor] = 1;
   
   return {
     health: 100,
+    defense: 0,
     matchedColors: {
       red: 0,
       green: 0,
@@ -37,7 +65,16 @@ const createInitialPlayerState = (isHuman: boolean = false): PlayerState => {
     activeSkillId: null,
     equippedSkills: defaultSkills,
     statusEffects: [],
-    skillCastCount: {}
+    skillCastCount: {},
+    colorStats,
+    // Keep these for type compatibility but don't use them
+    equippedItems: {
+      weapon: null,
+      armor: null,
+      accessory: null,
+      trinket: null
+    },
+    inventory: []
   };
 };
 
@@ -52,26 +89,26 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
   },
 
   selectClass: (player: Player, className: string) => {
-    console.log('selectClass called:', { player, className });
+    debugLog('PLAYER_SLICE', 'selectClass called:', { player, className });
     
     if (!CLASSES[className]) {
-      console.error('Class not found:', className);
+      debugLog('PLAYER_SLICE', 'Class not found:', className);
       return;
     }
     
     const classData = CLASSES[className];
-    console.log('Class data:', classData);
+    debugLog('PLAYER_SLICE', 'Class data:', classData);
     
     const defaultSkills = classData.defaultSkills;
-    console.log('Default skills:', defaultSkills);
+    debugLog('PLAYER_SLICE', 'Default skills:', defaultSkills);
     
     // Verify that all skills exist
     defaultSkills.forEach(skillId => {
       const skill = ALL_SKILLS[skillId];
       if (!skill) {
-        console.error(`Skill not found: ${skillId}`);
+        debugLog('PLAYER_SLICE', `Skill not found: ${skillId}`);
       } else {
-        console.log(`Skill found: ${skillId}`, skill);
+        debugLog('PLAYER_SLICE', `Skill found: ${skillId}`, skill);
       }
     });
     
@@ -85,7 +122,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       }
     }));
     
-    console.log(`Class ${className} selected for ${player}`);
+    debugLog('PLAYER_SLICE', `Class ${className} selected for ${player}`);
   },
 
   equipSkill: (player: Player, skillId: string, slotIndex: number) => {
@@ -126,25 +163,25 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
   },
 
   toggleSkill: (player: Player, skillId: string) => {
-    console.log('toggleSkill called:', { player, skillId });
+    debugLog('PLAYER_SLICE', 'toggleSkill called:', { player, skillId });
     
     const playerState = get()[player];
     const skill = ALL_SKILLS[skillId];
     
     if (!skill) {
-      console.error('Skill not found:', skillId);
+      debugLog('PLAYER_SLICE', 'Skill not found:', skillId);
       return;
     }
 
-    console.log('Skill found:', skill);
-    console.log('Player resources:', playerState.matchedColors);
-    console.log('Skill cost:', skill.cost);
+    debugLog('PLAYER_SLICE', 'Skill found:', skill);
+    debugLog('PLAYER_SLICE', 'Player resources:', playerState.matchedColors);
+    debugLog('PLAYER_SLICE', 'Skill cost:', skill.cost);
 
     // Check if player has enough resources
     let canUseSkill = true;
     Object.entries(skill.cost).forEach(([color, cost]) => {
       if (playerState.matchedColors[color as Color] < (cost || 0)) {
-        console.log(`Not enough ${color} resources: have ${playerState.matchedColors[color as Color]}, need ${cost}`);
+        debugLog('PLAYER_SLICE', `Not enough ${color} resources: have ${playerState.matchedColors[color as Color]}, need ${cost}`);
         canUseSkill = false;
       }
     });
@@ -155,7 +192,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     }
 
     const newActiveSkillId = playerState.activeSkillId === skillId ? null : skillId;
-    console.log('Setting active skill:', newActiveSkillId);
+    debugLog('PLAYER_SLICE', 'Setting active skill:', newActiveSkillId);
 
     set(state => ({
       [player]: {
@@ -171,7 +208,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     const playerState = state[currentPlayer];
     const activeSkillId = playerState.activeSkillId;
     
-    console.log('useSkill starting:', {
+    debugLog('PLAYER_SLICE', 'useSkill starting:', {
       row,
       col,
       activeSkillId,
@@ -181,17 +218,17 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     });
     
     if (!activeSkillId) {
-      console.log('No active skill found');
+      debugLog('PLAYER_SLICE', 'No active skill found');
       return;
     }
 
     const activeSkill = ALL_SKILLS[activeSkillId];
     if (!activeSkill) {
-      console.log('Invalid skill ID:', activeSkillId);
+      debugLog('PLAYER_SLICE', 'Invalid skill ID:', activeSkillId);
       return;
     }
 
-    console.log('Skill validation:', {
+    debugLog('PLAYER_SLICE', 'Skill validation:', {
       skillId: activeSkillId,
       skill: activeSkill,
       targetColor: activeSkill.targetColor,
@@ -201,7 +238,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
 
     // Check target color if skill requires specific target
     if (activeSkill.targetColor && board[row][col].color !== activeSkill.targetColor) {
-      console.log('Target color mismatch:', { 
+      debugLog('PLAYER_SLICE', 'Target color mismatch:', { 
         required: activeSkill.targetColor, 
         actual: board[row][col].color 
       });
@@ -215,27 +252,30 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       newMatchedColors[color as Color] -= (cost || 0);
     });
 
-    console.log('Applying skill effect:', {
+    debugLog('PLAYER_SLICE', 'Applying skill effect:', {
       skillId: activeSkill.id,
       targetTile: [row, col],
       boardState: board[row][col]
     });
     
+    // Clear selected tile before applying effect to prevent animation interference
+    set({ selectedTile: null });
+    
     // Apply skill effect
     try {
       await activeSkill.effect(state, row, col);
-      console.log('Skill effect completed, getting updated board');
+      debugLog('PLAYER_SLICE', 'Skill effect completed, getting updated board');
 
       // Get the current board state after the skill effect
       const updatedBoard = get().board;
-      console.log('Processing updated board:', {
+      debugLog('PLAYER_SLICE', 'Processing updated board:', {
         centerTileState: updatedBoard[row][col],
         hasMatchedTiles: updatedBoard.some(row => row.some(tile => tile.isMatched))
       });
       
       await get().processNewBoard(updatedBoard);
     } catch (error) {
-      console.error('Error applying skill effect:', error);
+      debugLog('PLAYER_SLICE', 'Error applying skill effect:', error);
     }
 
     // Update player state
@@ -247,7 +287,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       }
     }));
 
-    console.log('Player state updated, switching player');
+    debugLog('PLAYER_SLICE', 'Player state updated, switching player');
     
     // Switch turns after skill use
     get().switchPlayer();
@@ -256,6 +296,18 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
   switchPlayer: () => {
     const currentPlayer = get().currentPlayer;
     const nextPlayer = currentPlayer === 'human' ? 'ai' : 'human';
+    
+    // Process end-of-turn item effects for current player
+    const currentPlayerState = get()[currentPlayer];
+    Object.values(currentPlayerState.equippedItems).forEach(item => {
+      if (item) {
+        item.effects.forEach(effect => {
+          if (effect.onTurnEnd) {
+            effect.onTurnEnd(get());
+          }
+        });
+      }
+    });
     
     // Update status effects
     const updateStatusEffects = (player: Player) => {
@@ -273,7 +325,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
             const convertAmount = Math.floor(fromAmount / ratio);
             const remainingAmount = fromAmount % ratio;
             
-            console.log(`Converting ${convertAmount * ratio} ${from} mana to ${convertAmount} ${to} mana`);
+            debugLog('PLAYER_SLICE', `Converting ${convertAmount * ratio} ${from} mana to ${convertAmount} ${to} mana`);
             
             set(state => ({
               [player]: {
@@ -331,6 +383,18 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
         currentPlayer: nextPlayer,
         selectedTile: null  // Only clear selection when switching players
       }));
+
+      // Process start-of-turn item effects for the next player
+      const nextPlayerState = get()[nextPlayer];
+      Object.values(nextPlayerState.equippedItems).forEach(item => {
+        if (item) {
+          item.effects.forEach(effect => {
+            if (effect.onTurnStart) {
+              effect.onTurnStart(get());
+            }
+          });
+        }
+      });
 
       if (nextPlayer === 'ai') {
         get().makeAiMove();
@@ -478,4 +542,175 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     toast.error("AI couldn't find a move!");
     get().switchPlayer();
   },
+
+  // Item management functions - disabled for now
+  equipItem: (player: Player, itemId: string) => {
+    console.log('Item functionality is disabled');
+  },
+  
+  unequipItem: (player: Player, slot: 'weapon' | 'armor' | 'accessory' | 'trinket') => {
+    console.log('Item functionality is disabled');
+  },
+  
+  addItemToInventory: (player: Player, itemId: string) => {
+    console.log('Item functionality is disabled');
+  },
+  
+  removeItemFromInventory: (player: Player, itemId: string) => {
+    console.log('Item functionality is disabled');
+  },
+  
+  calculatePlayerStats: (player: Player) => {
+    const state = get();
+    const playerState = state[player];
+    
+    // Reset to base stats from class
+    const characterClass = CLASSES[playerState.className];
+    const colorStats: Record<Color, number> = {
+      red: 0, green: 0, blue: 0, yellow: 0, black: 0, empty: 0
+    };
+    
+    // Set primary and secondary color stats
+    colorStats[characterClass.primaryColor] = 3;
+    colorStats[characterClass.secondaryColor] = 1;
+    
+    // Apply status effects that modify stats
+    playerState.statusEffects.forEach(effect => {
+      if (effect.damageMultiplier && effect.damageMultiplier !== 1) {
+        // Process damage multiplier if needed
+      }
+    });
+    
+    // Update player state with calculated stats
+    set(state => ({
+      [player]: {
+        ...state[player],
+        colorStats
+      }
+    }));
+  },
+
+  // Updated damage function with skill damage parameter
+  takeDamage: (attacker: Player, defender: Player, damageAmount: number, isDirectDamage: boolean, isSkillDamage = false) => {
+    const state = get();
+    let totalDamage = damageAmount;
+    
+    debugLog('PLAYER_SLICE', 'takeDamage called', {
+      attacker,
+      defender,
+      initialDamage: damageAmount,
+      isDirectDamage,
+      isSkillDamage
+    });
+    
+    // 1. Apply attacker's damage multiplier from status effects if it's direct damage
+    if (isDirectDamage) {
+      const attackerDamageMultiplier = state[attacker].statusEffects.reduce(
+        (multiplier, effect) => multiplier * (effect.damageMultiplier || 1), 1
+      );
+      
+      if (attackerDamageMultiplier !== 1) {
+        totalDamage = Math.round(totalDamage * attackerDamageMultiplier);
+        debugLog('PLAYER_SLICE', `Applied attacker damage multiplier: ${attackerDamageMultiplier}`, {
+          originalDamage: damageAmount,
+          multipliedDamage: totalDamage
+        });
+      }
+      
+      // 1.5. Apply skill-specific damage multiplier if applicable
+      if (isSkillDamage) {
+        // Skill damage multiplier comes from status effects with a skillDamageMultiplier property
+        const skillDamageMultiplier = state[attacker].statusEffects.reduce(
+          (multiplier, effect) => multiplier * (effect.skillDamageMultiplier || 1), 1
+        );
+        
+        if (skillDamageMultiplier !== 1) {
+          const damageBeforeSkillMultiplier = totalDamage;
+          totalDamage = Math.round(totalDamage * skillDamageMultiplier);
+          debugLog('PLAYER_SLICE', `Applied skill damage multiplier: ${skillDamageMultiplier}`, {
+            damageBeforeSkillMultiplier,
+            afterSkillMultiplier: totalDamage
+          });
+        }
+      }
+      
+      // 2. Emit OnDamageDealt event for direct damage
+      if (state.emit) {
+        state.emit('OnDamageDealt', {
+          amount: totalDamage,
+          source: attacker,
+          target: defender,
+          damageType: isSkillDamage ? 'skill' : 'normal'
+        });
+      }
+    }
+    
+    // 3. Apply defender's damage multiplier from status effects (always applies)
+    const defenderDamageMultiplier = state[defender].statusEffects.reduce(
+      (multiplier, effect) => multiplier * (effect.damageMultiplier || 1), 1
+    );
+    
+    if (defenderDamageMultiplier !== 1) {
+      totalDamage = Math.round(totalDamage * defenderDamageMultiplier);
+      debugLog('PLAYER_SLICE', `Applied defender damage multiplier: ${defenderDamageMultiplier}`, {
+        previousDamage: totalDamage / defenderDamageMultiplier,
+        multipliedDamage: totalDamage
+      });
+    }
+    
+    // 3.5. Apply defender's skill damage reduction if applicable
+    if (isSkillDamage) {
+      // Skill damage reduction comes from status effects with a skillDamageReduction property
+      const skillDamageReduction = state[defender].statusEffects.reduce(
+        (reduction, effect) => reduction + (effect.skillDamageReduction || 0), 0
+      );
+      
+      if (skillDamageReduction > 0) {
+        const damageBeforeReduction = totalDamage;
+        totalDamage = Math.max(0, totalDamage - skillDamageReduction);
+        debugLog('PLAYER_SLICE', `Applied skill damage reduction: ${skillDamageReduction}`, {
+          damageBeforeReduction,
+          afterReduction: totalDamage
+        });
+      }
+    }
+    
+    // 4. Apply defense reduction (always applies)
+    const defenderDefense = state[defender].defense;
+    if (defenderDefense > 0) {
+      const reducedDamage = Math.max(0, totalDamage - defenderDefense);
+      debugLog('PLAYER_SLICE', `Defender defense reduced damage by ${defenderDefense}`, {
+        originalDamage: totalDamage,
+        reducedDamage: reducedDamage
+      });
+      totalDamage = reducedDamage;
+    }
+    
+    // 5. Emit OnDamageTaken event if it's direct damage
+    if (isDirectDamage && state.emit) {
+      state.emit('OnDamageTaken', {
+        amount: totalDamage,
+        source: attacker,
+        target: defender,
+        damageType: isSkillDamage ? 'skill' : 'normal'
+      });
+    }
+    
+    // 6. Apply the final damage
+    if (totalDamage > 0) {
+      set(state => ({
+        [defender]: {
+          ...state[defender],
+          health: Math.max(0, state[defender].health - totalDamage)
+        }
+      }));
+      
+      // Only show toast for direct damage to avoid spamming
+      if (isDirectDamage) {
+        toast.success(`Dealt ${totalDamage} damage${isSkillDamage ? ' with skill' : ''}!`);
+      }
+    }
+    
+    return totalDamage;
+  }
 }); 

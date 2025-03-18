@@ -25,7 +25,7 @@ export const GameBoardGrid: React.FC<GameBoardGridProps> = ({ activeTile }) => {
 
   return (
     <div
-      className="w-[32rem] h-[32rem] grid gap-1 relative"
+      className="w-full h-full max-w-[32rem] max-h-[32rem] md:w-[32rem] md:h-[32rem] grid gap-1 relative"
       style={{
         gridTemplateColumns: `repeat(${board.length}, minmax(0, 1fr))`,
         gridTemplateRows: `repeat(${board.length}, minmax(0, 1fr))`,

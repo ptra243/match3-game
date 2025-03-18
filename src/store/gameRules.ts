@@ -105,20 +105,29 @@ export const GAME_FLOW = {
 export const MATCH_RULES = {
   /**
    * Base damage calculation:
-   * 1. Base damage = number of tiles in match
-   * 2. Length bonus = (match length - 3) * 2 for matches > 3
-   * 3. Color multipliers:
-   *    - Primary color: 2x
-   *    - Secondary color: 1.5x
-   *    - Neutral color: 0x
+   * 1. Base damage = colorStat * Math.ceil(matchLength / 3)
+   *    (Color stat is applied once per 3 tiles, rounded up)
+   * 2. Length multipliers:
+   *    - 3 tiles: no multiplier
+   *    - 4 tiles: 1.5x multiplier
+   *    - 5+ tiles: 2x multiplier
+   * 3. Special shape multiplier: 1.5x for T or L shapes
+   * 4. Color stats from player's class and blessings:
+   *    - Primary color: 3 base points
+   *    - Secondary color: 1 base point
    */
   DAMAGE_CALCULATION: {
-    BASE_DAMAGE: 'match-length',
-    LENGTH_BONUS_MULTIPLIER: 2,
+    BASE_DAMAGE: 'color-stat-per-three-tiles',
+    LENGTH_MULTIPLIERS: {
+      THREE: 1,
+      FOUR: 1.5,
+      FIVE_PLUS: 2
+    },
+    SPECIAL_SHAPE_MULTIPLIER: 1.5,
     COLOR_MULTIPLIERS: {
-      PRIMARY: 1.5,
+      PRIMARY: 1,
       SECONDARY: 1,
-      NEUTRAL: 0,
+      NEUTRAL: 1,
     },
   },
 } as const;

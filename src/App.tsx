@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { GameBoard } from './components/game-board';
 import { PlayerSidebar } from './components/PlayerSidebar';
 import { ClassSelection } from './components/ClassSelection';
+import BlessingPanel from './components/BlessingPanel';
 import { useGameStore } from './store/gameStore';
 import { Toaster } from 'react-hot-toast';
 
@@ -26,12 +27,14 @@ function App() {
             Match 3 Battle
           </h1>
           {!showClassSelection && (
-            <button
-              onClick={handleReset}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Reset Game
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleReset}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Reset Game
+              </button>
+            </div>
           )}
         </div>
         
@@ -50,11 +53,16 @@ function App() {
             </button>
           </div>
         ) : (
-          <div className="flex justify-center items-start">
-            <PlayerSidebar player="human" position="left" />
-            <GameBoard />
-            <PlayerSidebar player="ai" position="right" />
-          </div>
+          <>
+            <div className="flex flex-col md:flex-row justify-center items-center md:items-start">
+              <PlayerSidebar player="human" position="left" />
+              <div className="flex flex-col">
+                <GameBoard />
+                <BlessingPanel />
+              </div>
+              <PlayerSidebar player="ai" position="right" />
+            </div>
+          </>
         )}
       </div>
     </div>
