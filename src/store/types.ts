@@ -82,6 +82,7 @@ export interface StatusEffect {
   extraTurn?: boolean;
   skillDamageMultiplier?: number; // Multiplier specifically for skill damage
   skillDamageReduction?: number; // Flat reduction specifically for skill damage
+  colorStatBonus?:  Record<Color, number>,
   resourceBonus?: {
     matchColor: Color;
     bonusColor: Color;

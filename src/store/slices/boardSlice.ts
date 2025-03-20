@@ -21,7 +21,10 @@ export interface BoardSlice {
   dropTiles: () => Promise<Tile[][]>;
   fillEmptyTiles: () => Promise<Tile[][]>;
   markTilesForDestruction: (tiles: { row: number; col: number }[]) => Promise<{ destroyedTiles: { row: number; col: number; color: Color }[] }>;
-  markTilesAsMatched: (tiles: { row: number; col: number }[]) => Promise<{ matchedTiles: { row: number; col: number; color: Color }[] }>;
+  markTilesAsMatched: (tiles: { row: number; col: number }[]) => Promise<{ 
+    matchedTiles: { row: number; col: number; color: Color }[];
+    explosionTilesCount: number;
+  }>;
   convertTiles: (tiles: { row: number; col: number; color: Color }[]) => Promise<void>;
   updateTile: (row: number, col: number, tile: Partial<Tile>) => void;
   setBoard: (newBoard: Tile[][]) => void;
@@ -276,7 +279,34 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     const MAX_CASCADES = 20; // Safety limit to prevent infinite loops
     let cascadeCount = 0;
 
-    // First, check if there are any matched/destroyed tiles that need to be processed
+    // First, check if there are any empty tiles that need to be processed
+    const emptyTiles: { row: number; col: number }[] = [];
+    currentBoard.forEach((row, rowIndex) => {
+      row.forEach((tile, colIndex) => {
+        if (tile.color === 'empty') {
+          emptyTiles.push({ row: rowIndex, col: colIndex });
+        }
+      });
+    });
+    
+    debugLog('BOARD_SLICE', 'Initial empty tiles check:', {
+      emptyTilesCount: emptyTiles.length,
+      emptyTiles
+    });
+    
+    if (emptyTiles.length > 0) {
+      debugLog('BOARD_SLICE', 'Found empty tiles, filling with new tiles');
+      // Process drops and fills for empty tiles
+      currentBoard = await get().dropTiles();
+      currentBoard = await get().fillEmptyTiles();
+      
+      // Set the board state after filling
+      set({ board: currentBoard });
+      await get().waitForAllAnimations();
+      debugLog('BOARD_SLICE', 'Empty tiles filled');
+    }
+
+    // Now, check if there are any matched/destroyed tiles that need to be processed
     const matchedTiles: { row: number; col: number; tile: Tile }[] = [];
     currentBoard.forEach((row, rowIndex) => {
       row.forEach((tile, colIndex) => {
@@ -286,7 +316,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       });
     });
 
-    debugLog('BOARD_SLICE', 'Initial board state:', {
+    debugLog('BOARD_SLICE', 'Matched tiles check:', {
       matchedTilesCount: matchedTiles.length,
       matchedTiles,
       hasMatchedTiles: matchedTiles.length > 0
@@ -303,21 +333,21 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       currentBoard = await get().dropTiles();
       
       // Check if we have any empty tiles after dropping
-      const emptyTiles: { row: number; col: number }[] = [];
+      const emptyTilesAfterDrop: { row: number; col: number }[] = [];
       currentBoard.forEach((row, rowIndex) => {
         row.forEach((tile, colIndex) => {
           if (tile.color === 'empty') {
-            emptyTiles.push({ row: rowIndex, col: colIndex });
+            emptyTilesAfterDrop.push({ row: rowIndex, col: colIndex });
           }
         });
       });
       
       debugLog('BOARD_SLICE', 'Board state after drops:', {
-        emptyTilesCount: emptyTiles.length,
-        emptyTiles
+        emptyTilesCount: emptyTilesAfterDrop.length,
+        emptyTiles: emptyTilesAfterDrop
       });
       
-      if (emptyTiles.length > 0) {
+      if (emptyTilesAfterDrop.length > 0) {
         debugLog('BOARD_SLICE', 'Found empty tiles after drop, filling with new tiles');
         currentBoard = await get().fillEmptyTiles();
       }
@@ -435,7 +465,35 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     debugLog('BOARD_SLICE', 'Marking tiles as matched', tiles);
     const board = get().board;
     const matchedTiles: { row: number; col: number; color: Color }[] = [];
-
+    
+    // Check for ignited tiles and expand the match to include surrounding tiles
+    const explosionTiles: { row: number; col: number }[] = [];
+    const BOARD_SIZE = board.length;
+    
+    // First pass: identify ignited tiles
+    for (const { row, col } of tiles) {
+      if (board[row][col].isIgnited) {
+        debugLog('BOARD_SLICE', 'Found ignited tile to explode', { row, col, color: board[row][col].color });
+        
+        // Add surrounding tiles in a 3x3 pattern
+        for (let r = Math.max(0, row - 1); r <= Math.min(BOARD_SIZE - 1, row + 1); r++) {
+          for (let c = Math.max(0, col - 1); c <= Math.min(BOARD_SIZE - 1, col + 1); c++) {
+            // Skip empty tiles
+            if (board[r][c].color === 'empty') continue;
+            
+            // Skip tiles that are already matched
+            if (tiles.some(t => t.row === r && t.col === c)) continue;
+            
+            // Add surrounding tile to explosion
+            explosionTiles.push({ row: r, col: c });
+          }
+        }
+      }
+    }
+    
+    // Combine original matched tiles with explosion tiles
+    const allTiles = [...tiles, ...explosionTiles];
+    
     // Clear the selected tile to prevent interference with animations
     set({ selectedTile: null });
 
@@ -444,7 +502,7 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     const animationIds = [];
 
     // Register explode animations for all matched tiles
-    for (const { row, col } of tiles) {
+    for (const { row, col } of allTiles) {
       const tileId = `tile-${row}-${col}`;
       const animId = get().registerAnimation('explode', [tileId], { 
         row, 
@@ -452,13 +510,12 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
         color: board[row][col].color 
       });
       animationIds.push(animId);
-    
     }
 
     // 2. Mark tiles as matched in the board state
     const newBoard = board.map((row, rowIndex) => 
       row.map((tile, colIndex) => {
-        const isMatched = tiles.some(t => t.row === rowIndex && t.col === colIndex);
+        const isMatched = allTiles.some(t => t.row === rowIndex && t.col === colIndex);
         if (isMatched) {
           matchedTiles.push({ row: rowIndex, col: colIndex, color: tile.color });
           return { ...tile, isMatched: true, isAnimating: true };
@@ -478,7 +535,18 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     // 5. Wait for all animations to complete
     await get().waitForAllAnimations();
     
-    return { matchedTiles };
+    // Add a debug message about ignited tile explosions if any occurred
+    if (explosionTiles.length > 0) {
+      debugLog('BOARD_SLICE', 'Ignited tile explosion', { 
+        ignitedCount: explosionTiles.length, 
+        totalMatched: matchedTiles.length 
+      });
+    }
+    
+    return { 
+      matchedTiles,
+      explosionTilesCount: explosionTiles.length 
+    };
   },
 
   convertTiles: async (tiles: { row: number; col: number; color: Color }[]) => {

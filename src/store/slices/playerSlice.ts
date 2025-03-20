@@ -10,6 +10,7 @@ export interface PlayerSlice {
   human: PlayerState;
   ai: PlayerState;
   currentPlayer: Player;
+  aiDifficulty: number; // 1-5, where 5 is the hardest
   selectedTile: { row: number; col: number } | null;
   selectTile: (row: number, col: number) => void;
   checkSkillReadiness: (player: Player) => void;
@@ -19,6 +20,7 @@ export interface PlayerSlice {
   makeAiMove: () => Promise<void>;
   selectClass: (player: Player, className: string) => void;
   equipSkill: (player: Player, skillId: string, slotIndex: number) => void;
+  setAiDifficulty: (level: number) => void;
   
   // Updated damage function signature
   takeDamage: (attacker: Player, defender: Player, damageAmount: number, isDirectDamage: boolean, isSkillDamage?: boolean) => number;
@@ -82,6 +84,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
   human: createInitialPlayerState(true),
   ai: createInitialPlayerState(false),
   currentPlayer: 'human',
+  aiDifficulty: 3, // Default to medium difficulty
   selectedTile: null,
 
   selectTile: (row: number, col: number) => {
@@ -191,8 +194,17 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       return;
     }
 
+    // If the skill doesn't require a target, execute it immediately
+    if (skill.requiresTarget === false) {
+      debugLog('PLAYER_SLICE', 'Skill does not require target, executing immediately');
+      // Execute the skill at position 0,0 (the position doesn't matter for non-targeted skills)
+      get().useSkill(0, 0);
+      return;
+    }
+
+    // Otherwise, set it as the active skill for targeting
     const newActiveSkillId = playerState.activeSkillId === skillId ? null : skillId;
-    debugLog('PLAYER_SLICE', 'Setting active skill:', newActiveSkillId);
+    debugLog('PLAYER_SLICE', 'Setting active skill for targeting:', newActiveSkillId);
 
     set(state => ({
       [player]: {
@@ -266,6 +278,9 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       await activeSkill.effect(state, row, col);
       debugLog('PLAYER_SLICE', 'Skill effect completed, getting updated board');
 
+      // Make sure all animations are complete before getting the board state
+      await get().waitForAllAnimations();
+
       // Get the current board state after the skill effect
       const updatedBoard = get().board;
       debugLog('PLAYER_SLICE', 'Processing updated board:', {
@@ -273,7 +288,11 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
         hasMatchedTiles: updatedBoard.some(row => row.some(tile => tile.isMatched))
       });
       
+      // Ensure board is fully processed - this fills empty tiles and drops tiles
       await get().processNewBoard(updatedBoard);
+      
+      // Wait for all animations to complete again after processing the board
+      await get().waitForAllAnimations();
     } catch (error) {
       debugLog('PLAYER_SLICE', 'Error applying skill effect:', error);
     }
@@ -408,7 +427,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     // Wait for any ongoing animations to complete
     await get().waitForAllAnimations();
 
-    const { board, ai } = get();
+    const { board, ai, aiDifficulty } = get();
     const BOARD_SIZE = board.length;
     const characterClass = CLASSES[ai.className];
 
@@ -438,21 +457,29 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       if (skill && skill.id) {
         get().toggleSkill('ai', skill.id);
         
-        // Find appropriate target for the skill
-        if (skill.targetColor) {
-          for (let row = 0; row < BOARD_SIZE; row++) {
-            for (let col = 0; col < BOARD_SIZE; col++) {
-              if (board[row][col].color === skill.targetColor) {
-                await get().useSkill(row, col);
-                return;
+        // For skills with requiresTarget: false, toggleSkill will execute them immediately
+        // Only handle targeted skills here
+        if (skill.requiresTarget !== false) {
+          // Find appropriate target for the skill
+          if (skill.targetColor) {
+            for (let row = 0; row < BOARD_SIZE; row++) {
+              for (let col = 0; col < BOARD_SIZE; col++) {
+                if (board[row][col].color === skill.targetColor) {
+                  await get().useSkill(row, col);
+                  return;
+                }
               }
             }
+          } else {
+            // If no specific target color needed, just use at center of board
+            const centerRow = Math.floor(BOARD_SIZE / 2);
+            const centerCol = Math.floor(BOARD_SIZE / 2);
+            await get().useSkill(centerRow, centerCol);
+            return;
           }
-        } else {
-          // If no specific target needed, just use at 0,0
-          await get().useSkill(0, 0);
-          return;
         }
+        // If we got here with a non-targeted skill, it was already executed by toggleSkill
+        return;
       }
     }
 
@@ -495,17 +522,22 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       return score;
     };
 
-    // Find the best move
-    let bestScore = -1;
-    let bestMove: { row1: number; col1: number; row2: number; col2: number } | null = null;
+    // Store the top 5 moves
+    type MoveOption = {
+      row1: number;
+      col1: number;
+      row2: number;
+      col2: number;
+      score: number;
+    };
+    const topMoves: MoveOption[] = [];
 
     // Check horizontal swaps
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE - 1; col++) {
         const score = evaluateMove(row, col, row, col + 1);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = { row1: row, col1: col, row2: row, col2: col + 1 };
+        if (score > 0) {
+          addToTopMoves({ row1: row, col1: col, row2: row, col2: col + 1, score });
         }
       }
     }
@@ -514,26 +546,65 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     for (let col = 0; col < BOARD_SIZE; col++) {
       for (let row = 0; row < BOARD_SIZE - 1; row++) {
         const score = evaluateMove(row, col, row + 1, col);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = { row1: row, col1: col, row2: row + 1, col2: col };
+        if (score > 0) {
+          addToTopMoves({ row1: row, col1: col, row2: row + 1, col2: col, score });
         }
       }
     }
 
-    if (bestMove) {
+    // Helper function to add a move to the top moves list
+    function addToTopMoves(move: MoveOption) {
+      topMoves.push(move);
+      // Sort by score descending and keep only the top 5
+      topMoves.sort((a, b) => b.score - a.score);
+      if (topMoves.length > 5) {
+        topMoves.pop();
+      }
+    }
+
+    if (topMoves.length > 0) {
+      // Select a move based on difficulty
+      let selectedMove: MoveOption;
+      
+      if (topMoves.length === 1) {
+        // If there's only one move, just use it
+        selectedMove = topMoves[0];
+      } else {
+        // Choose a move based on difficulty
+        // Difficulty 5: Always pick the best move (index 0)
+        // Difficulty 1-4: Potentially pick suboptimal moves
+        
+        // Calculate the index range based on difficulty
+        // Lower difficulty means higher chance of picking suboptimal moves
+        const maxIndex = Math.min(5 - aiDifficulty, topMoves.length - 1);
+        
+        // Randomly select an index within our range
+        // This ensures that even at lowest difficulty, the worst move is still from top 5
+        const selectedIndex = Math.floor(Math.random() * (maxIndex + 1));
+        selectedMove = topMoves[selectedIndex];
+        
+        debugLog('PLAYER_SLICE', 'AI move selection', {
+          difficulty: aiDifficulty,
+          possibleMovesCount: topMoves.length,
+          maxIndex,
+          selectedIndex,
+          bestMoveScore: topMoves[0].score,
+          selectedMoveScore: selectedMove.score
+        });
+      }
+
       // Visual feedback for AI's move
-      get().selectTile(bestMove.row1, bestMove.col1);
+      get().selectTile(selectedMove.row1, selectedMove.col1);
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      get().selectTile(bestMove.row2, bestMove.col2);
+      get().selectTile(selectedMove.row2, selectedMove.col2);
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Clear selection before swap
       set({ selectedTile: null });
       
       // Execute the move
-      await get().swapTiles(bestMove.row1, bestMove.col1, bestMove.row2, bestMove.col2);
+      await get().swapTiles(selectedMove.row1, selectedMove.col1, selectedMove.row2, selectedMove.col2);
       //switch player after move. If we have an extra turn, it will be handled in switchPlayer
       get().switchPlayer();
       return;
@@ -712,5 +783,9 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     }
     
     return totalDamage;
+  },
+
+  setAiDifficulty: (level: number) => {
+    set({ aiDifficulty: level });
   }
 }); 

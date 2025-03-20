@@ -2,7 +2,7 @@ import {
   FireIcon,
   CloudIcon,
   SparklesIcon,
-  CurrencyDollarIcon,
+  ShieldCheckIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/solid';
 import { Color } from '../../store/types';
@@ -20,7 +20,7 @@ export const TileIcon: React.FC<TileIconProps> = ({ color }) => {
     case 'green':
       return <SparklesIcon className="w-8 h-8 text-green-200 pointer-events-none" />;
     case 'yellow':
-      return <CurrencyDollarIcon className="w-8 h-8 text-yellow-200 pointer-events-none" />;
+      return <ShieldCheckIcon className="w-8 h-8 text-yellow-200 pointer-events-none" />;
     case 'black':
       return <ExclamationTriangleIcon className="w-8 h-8 text-gray-200 pointer-events-none" />;
     default:

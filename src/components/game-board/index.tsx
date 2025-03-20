@@ -86,7 +86,7 @@ export const GameBoard: React.FC = () => {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="p-2 md:p-4 bg-gray-800 rounded-lg m-4">
+      <div className="p-1 sm:p-2 md:p-4 bg-gray-800 rounded-lg m-2 md:m-4 mt-16 sm:mt-2">
         <GameBoardAnimations />
         <GameBoardGrid activeTile={activeTile} />
       </div>

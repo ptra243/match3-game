@@ -155,9 +155,9 @@ export const GameTile: React.FC<GameTileProps> = ({
       ${isDragging ? 'opacity-50 scale-105' : 'opacity-100 scale-100'}
       ${isAiSelected ? 'ring-4 ring-white ring-opacity-50 animate-pulse' : ''}
       ${getAnimationClass()}
-      ${isSelected && !currentAnimation ? 'ring-4 ring-yellow-400 ring-opacity-75' : ''}
+      ${isSelected && !currentAnimation ? 'ring-2 ring-yellow-400 ring-opacity-75' : ''}
       ${shouldBeEmpty() ? 'opacity-0' : ''}
-      ${isSkillActive && canTargetWithSkill && isHumanTurn && !currentAnimation ? 'cursor-pointer hover:ring-4 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
+      ${isSkillActive && canTargetWithSkill && isHumanTurn && !currentAnimation ? 'cursor-pointer hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
       transition-all duration-300`}
     onAnimationEnd={handleAnimationEnd}
   >

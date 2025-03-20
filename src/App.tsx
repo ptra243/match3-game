@@ -22,15 +22,15 @@ function App() {
     <div className="min-h-screen bg-gray-900 p-8">
       <Toaster position="top-center" />
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-white">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-8">
+          <h1 className="text-2xl sm:text-4xl font-bold text-white text-center mb-4 sm:mb-0">
             Match 3 Battle
           </h1>
           {!showClassSelection && (
-            <div className="flex space-x-3">
+            <div className="flex space-x-3 w-full sm:w-auto justify-center">
               <button
                 onClick={handleReset}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-2 py-1 sm:px-4 sm:py-2 text-sm sm:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Reset Game
               </button>

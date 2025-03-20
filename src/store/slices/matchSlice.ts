@@ -280,6 +280,7 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
       
       // Process all matches
       let hasSpecialMatch = false;
+      let hasIgnitedTileMatch = false;
       matches.forEach(match => {
         match.tiles.forEach(tile => {
           const key = `${tile.row},${tile.col}`;
@@ -287,6 +288,11 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
             matchedTilesSet.add(key);
             matched.push({ ...tile, color: match.color });
             matchedColors[match.color] = (matchedColors[match.color] || 0) + 1;
+            
+            // Check if this tile is ignited
+            if (board[tile.row][tile.col].isIgnited) {
+              hasIgnitedTileMatch = true;
+            }
           }
         });
         
@@ -311,7 +317,32 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
       get().incrementMatchSequence();
       
       // Mark all matched tiles on the board
-      await get().markTilesAsMatched(matched);
+      const matchResult = await get().markTilesAsMatched(matched);
+      
+      // Display notification if ignited tiles were matched
+      if (hasIgnitedTileMatch) {
+        const explosionBonus = matchResult.explosionTilesCount * 3; // 3 damage per explosion tile
+        
+        toast.success(`BOOM! Ignited tiles exploded! +${explosionBonus} explosion damage!`, { 
+          icon: '🔥',
+          duration: 2000,
+          style: { 
+            background: '#ff4500',
+            color: '#fff',
+            fontWeight: 'bold'
+          }
+        });
+        debugLog('MATCH_SLICE', 'Ignited tiles exploded', { 
+          explosionTiles: matchResult.explosionTilesCount,
+          explosionBonus 
+        });
+        
+        // Apply bonus explosion damage immediately
+        if (explosionBonus > 0) {
+          const opponent = currentPlayer === 'human' ? 'ai' : 'human';
+          get().takeDamage(currentPlayer, opponent, explosionBonus, true, true);
+        }
+      }
       
       // Calculate and apply damage
       const opponent = currentPlayer === 'human' ? 'ai' : 'human';
