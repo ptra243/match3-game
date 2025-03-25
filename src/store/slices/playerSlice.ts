@@ -1,10 +1,9 @@
-import { StateCreator } from 'zustand';
-import { GameState, PlayerState, Player, Color, Tile, Item } from '../types';
-import { toast } from 'react-hot-toast';
-import { CLASSES } from '../classes';
-import { ALL_SKILLS, ClassSkill } from '../skills';
-import { debugLog } from '../slices/debug';
-import { ALL_ITEMS } from '../items';
+import {StateCreator} from 'zustand';
+import {Color, GameState, Player, PlayerState} from '../types';
+import {toast} from 'react-hot-toast';
+import {CLASSES} from '../classes';
+import {ALL_SKILLS} from '../skills';
+import {debugLog} from '../slices/debug';
 
 export interface PlayerSlice {
   human: PlayerState;
@@ -194,13 +193,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       return;
     }
 
-    // If the skill doesn't require a target, execute it immediately
-    if (skill.requiresTarget === false) {
-      debugLog('PLAYER_SLICE', 'Skill does not require target, executing immediately');
-      // Execute the skill at position 0,0 (the position doesn't matter for non-targeted skills)
-      get().useSkill(0, 0);
-      return;
-    }
+
 
     // Otherwise, set it as the active skill for targeting
     const newActiveSkillId = playerState.activeSkillId === skillId ? null : skillId;
@@ -212,6 +205,14 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
         activeSkillId: newActiveSkillId
       }
     }));
+    // If the skill doesn't require a target, execute it immediately
+    if (!skill.requiresTarget) {
+      debugLog('PLAYER_SLICE', 'Skill does not require target, executing immediately');
+
+      // Execute the skill at position 0,0 (the position doesn't matter for non-targeted skills)
+      get().useSkill(0, 0).then();
+      return;
+    }
   },
 
   useSkill: async (row: number, col: number) => {
@@ -219,7 +220,7 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     const { currentPlayer, board } = state;
     const playerState = state[currentPlayer];
     const activeSkillId = playerState.activeSkillId;
-    
+
     debugLog('PLAYER_SLICE', 'useSkill starting:', {
       row,
       col,
@@ -277,7 +278,6 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
     try {
       await activeSkill.effect(state, row, col);
       debugLog('PLAYER_SLICE', 'Skill effect completed, getting updated board');
-
       // Make sure all animations are complete before getting the board state
       await get().waitForAllAnimations();
 

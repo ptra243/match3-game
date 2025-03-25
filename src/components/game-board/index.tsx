@@ -1,18 +1,10 @@
 import React from 'react';
-import {
-  DndContext,
-  DragEndEvent,
-  MouseSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  TouchSensor,
-} from '@dnd-kit/core';
-import { useGameStore } from '../../store/gameStore';
-import { GameBoardAnimations } from './GameBoardAnimations';
-import { GameBoardGrid } from './GameBoardGrid';
-import { GameTile } from './GameTile';
-import { debugLog } from '../../store/slices/debug';
+import {DndContext, DragEndEvent, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors,} from '@dnd-kit/core';
+import {useGameStore} from '../../store/gameStore';
+import {GameBoardAnimations} from './GameBoardAnimations';
+import {GameBoardGrid} from './GameBoardGrid';
+import {GameTile} from './GameTile';
+import {debugLog} from '../../store/slices/debug';
 
 export const GameBoard: React.FC = () => {
   const { board, swapTiles, initializeBoard } = useGameStore();
@@ -86,7 +78,7 @@ export const GameBoard: React.FC = () => {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="p-1 sm:p-2 md:p-4 bg-gray-800 rounded-lg m-2 md:m-4 mt-16 sm:mt-2">
+      <div className="p-0.5 sm:p-2 md:p-4 bg-gray-800 rounded-lg m-0.5 sm:m-2 md:m-4">
         <GameBoardAnimations />
         <GameBoardGrid activeTile={activeTile} />
       </div>

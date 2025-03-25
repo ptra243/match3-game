@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { useGameStore } from '../store/gameStore';
-import { Color, Player } from '../store/types';
-import { UserCircleIcon } from '@heroicons/react/24/solid';
-import { CLASSES } from '../store/classes';
-import { TileIcon } from './game-board/TileIcon';
-import { ALL_SKILLS } from '../store/skills';
-import { toast } from 'react-hot-toast';
-import { MATCH_RULES } from '../store/gameRules';
+import React, {useEffect, useState} from 'react';
+import {useGameStore} from '../store/gameStore';
+import {Color, Player} from '../store/types';
+import {CLASSES} from '../store/classes';
+import {TileIcon} from './game-board/TileIcon';
+import {ALL_SKILLS} from '../store/skills';
+import {toast} from 'react-hot-toast';
+import {MATCH_RULES} from '../store/gameRules';
 
 interface PlayerSidebarProps {
   player: Player;
@@ -86,6 +85,11 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
     }
     
     toggleSkill(player, skillId);
+
+    // Automatically collapse sidebar if mobile
+    if (isMobile && !isCollapsed) {
+      setIsCollapsed(true);
+    }
   };
 
   // Check if a skill is ready to use
@@ -118,6 +122,8 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
       ${isCollapsed ? 'w-12 h-12 m-0' : 'w-full md:w-64 p-4 m-2 md:m-0'}`}
     >
       {/* Toggle Button - serves as the only icon in collapsed state */}
+
+      {isMobile && (
       <button 
         onClick={toggleCollapse}
         className={`${isCollapsed ? 'w-full h-full' : 'absolute'} 
@@ -130,7 +136,7 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }
           '✕'
         }
       </button>
-      
+      )}
       {!isCollapsed && (
         // Expanded view - full sidebar
         <>

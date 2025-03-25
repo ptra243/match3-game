@@ -1,7 +1,6 @@
-import toast from 'react-hot-toast';
-import { ClassSkill } from '../types';
-import { Effects, adaptToLegacySkill, selectRandom } from './effects/effects';
-import { StatusEffectBuilder } from './effects/statusBuilder';
+import {ClassSkill} from '../types';
+import {adaptToLegacySkill, Effects} from './effects/effects';
+import {StatusEffectBuilder} from './effects/statusBuilder';
 
 // Define skills using the effects system
 const createFireballSkill = (): ClassSkill => adaptToLegacySkill({
@@ -31,7 +30,7 @@ const createInfernoSkill = (): ClassSkill => adaptToLegacySkill({
   id: 'inferno',
   name: 'Inferno',
   description: 'Ignite 5 random tiles on the board. Ignited tiles deal 3 extra damage when matched',
-  cost: { red: 6, yellow: 2 },
+  cost: {},
   primaryColor: 'red',
   secondaryColor: 'yellow',
   requiresTarget: false,

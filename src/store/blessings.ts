@@ -1,8 +1,9 @@
-import { Blessing, Color, GameState, Effect } from './types';
-import { GameEventType, GameEventPayload } from './slices/eventSlice';
-import { toast } from 'react-hot-toast';
-import { debugLog } from './slices/debug';
-import { CLASSES } from './classes';
+import {Blessing, Color, Effect, GameState} from './types';
+import {GameEventPayload, GameEventType} from './slices/eventSlice';
+import {toast} from 'react-hot-toast';
+import {debugLog} from './slices/debug';
+import {CLASSES} from './classes';
+import {TileHelpers} from "./skills/effects/TileHelpers.ts";
 
 // Helper function to get primary color for a player
 const getPrimaryColor = (state: GameState, player: string): Color => {
@@ -12,11 +13,11 @@ const getPrimaryColor = (state: GameState, player: string): Color => {
 
 // Create blessing factory function
 const createBlessing = (
-  id: string, 
-  name: string, 
-  description: string, 
-  color: Color, 
-  cost: number, 
+    id: string,
+    name: string,
+    description: string,
+    color: Color,
+    cost: number,
   effects: Effect[] | Effect,
   duration?: number
 ): Blessing => ({
@@ -36,7 +37,7 @@ const createDamageEffect = (amount: number, triggerType: 'immediate' | GameEvent
     const target = state.currentPlayer === 'human' ? 'ai' : 'human';
     state[target].health = Math.max(0, state[target].health - amount);
     toast.success(`Dealt ${amount} damage to opponent!`);
-    
+
     if (state.emit) {
       state.emit('OnDamageTaken', {
         amount,
@@ -49,11 +50,11 @@ const createDamageEffect = (amount: number, triggerType: 'immediate' | GameEvent
   onTrigger: (state: GameState, event: GameEventPayload) => {
     // Only process if this is an immediate trigger or the event matches
     if (triggerType === 'immediate') return;
-    
+
     const target = state.currentPlayer === 'human' ? 'ai' : 'human';
     state[target].health = Math.max(0, state[target].health - amount);
     toast.success(`${triggerType} triggered! Dealt ${amount} damage to opponent!`);
-    
+
     if (state.emit) {
       state.emit('OnDamageTaken', {
         amount,
@@ -92,7 +93,7 @@ const createHealEffect = (amount: number, triggerType: 'immediate' | GameEventTy
   },
   onTrigger: (state: GameState, event: GameEventPayload) => {
     if (triggerType === 'immediate') return;
-    
+
     const player = state.currentPlayer;
     const originalHealth = state[player].health;
     state[player].health = Math.min(100, originalHealth + amount);
@@ -142,44 +143,44 @@ const createItemInspiredBlessings = () => {
           // Extract damage and target safely from the event payload
           const damageEvent = event as any;
           if (!damageEvent.amount || !damageEvent.target) return false;
-          
+
           if (damageEvent.target !== state.currentPlayer) return false;
-          
+
           const player = state.currentPlayer;
           const damage = damageEvent.amount;
-          
+
           if (state[player].health <= damage && damage > 0) {
             state[player].health = 20; // Set health to 20 instead of dying
             toast.success('Phoenix Blessing saved you from defeat!');
             debugLog('BLESSING_EFFECT', 'Phoenix Blessing prevented defeat', { player });
-            
+
             // Remove this effect after it's used
             const playerEffects = state[player].statusEffects;
-            const index = playerEffects.findIndex(effect => 
+            const index = playerEffects.findIndex(effect =>
               // Just use properties that exist on StatusEffect interface
-              effect.turnsRemaining > 0 && 
-              effect.damageMultiplier === 1 && 
+                effect.turnsRemaining > 0 &&
+                effect.damageMultiplier === 1 &&
               effect.resourceMultiplier === 1
             );
-            
+
             if (index >= 0) {
               playerEffects.splice(index, 1);
             }
-            
+
             return true; // Signal that the event was handled
           }
-          
+
           return false;
         }
       }
     ),
-    
+
     // Inspired by Stone of Rejuvenation
     rejuvenation: createBlessing(
       'rejuvenation',
       'Rejuvenation',
       'Heal 3 health at the start of each turn for 3 turns',
-      'green', 
+        'green',
       5,
       {
         triggerType: 'StartOfTurn',
@@ -197,7 +198,7 @@ const createItemInspiredBlessings = () => {
       },
       3
     ),
-    
+
     // Inspired by Elemental Catalyst
     catalyst_blessing: createBlessing(
       'catalyst_blessing',
@@ -210,14 +211,14 @@ const createItemInspiredBlessings = () => {
         turnsRemaining: 3,
         onTrigger: (state: GameState) => {
           const player = state.currentPlayer;
-          
+
           // Add temporary damage multiplier for the next turn
           state[player].statusEffects.push({
             damageMultiplier: 1.2,
             resourceMultiplier: 1, // Required field by StatusEffect interface
             turnsRemaining: 1
           });
-          
+
           toast.success('Elemental Catalyst: Damage increased for next turn!');
           debugLog('BLESSING_EFFECT', 'Catalyst applied damage boost', { player });
           return true;
@@ -225,7 +226,7 @@ const createItemInspiredBlessings = () => {
       },
       3
     ),
-    
+
     // Inspired by Resource Prism
     resource_conversion: createBlessing(
       'resource_conversion',
@@ -239,21 +240,21 @@ const createItemInspiredBlessings = () => {
         onTrigger: (state: GameState) => {
           const player = state.currentPlayer;
           const totalResources = Object.values(state[player].matchedColors).reduce((sum, val) => sum + val, 0);
-          
+
           if (totalResources >= 5) {
             // Convert 5 resources (randomly chosen) into 10 health
             const colors = Object.keys(state[player].matchedColors).filter(
               color => color !== 'empty' && state[player].matchedColors[color as Color] > 0
             ) as Color[];
-            
+
             if (colors.length > 0) {
               let remaining = 5;
               const consumed: Partial<Record<Color, number>> = {};
-              
+
               while (remaining > 0 && colors.length > 0) {
                 const randomColorIndex = Math.floor(Math.random() * colors.length);
                 const color = colors[randomColorIndex];
-                
+
                 if (state[player].matchedColors[color] > 0) {
                   state[player].matchedColors[color]--;
                   consumed[color] = (consumed[color] || 0) + 1;
@@ -263,15 +264,15 @@ const createItemInspiredBlessings = () => {
                   colors.splice(randomColorIndex, 1);
                 }
               }
-              
+
               if (remaining === 0) {
                 const healAmount = 10;
                 state[player].health = Math.min(100, state[player].health + healAmount);
-                
+
                 const resourceDesc = Object.entries(consumed)
                   .map(([color, amount]) => `${amount} ${color}`)
                   .join(', ');
-                
+
                 toast.success(`Resource Conversion: ${resourceDesc} into ${healAmount} health!`);
                 return true;
               }
@@ -285,7 +286,7 @@ const createItemInspiredBlessings = () => {
       },
       2
     ),
-    
+
     // Inspired by Lucky Charm
     lucky_blessing: createBlessing(
       'lucky_blessing',
@@ -299,10 +300,10 @@ const createItemInspiredBlessings = () => {
         onTrigger: (state: GameState, event: GameEventPayload) => {
           if (Math.random() < 0.3) { // 30% chance
             const matchEvent = event as any;
-            const color = Object.keys(matchEvent.colors).reduce((a, b) => 
+            const color = Object.keys(matchEvent.colors).reduce((a, b) =>
               matchEvent.colors[a as Color] > matchEvent.colors[b as Color] ? a : b
             ) as Color;
-            
+
             const player = state.currentPlayer;
             const extraAmount = 1;
             state[player].matchedColors[color] += extraAmount;
@@ -317,7 +318,7 @@ const createItemInspiredBlessings = () => {
       },
       3
     ),
-    
+
     // Inspired by Staff of Flames
     ignite_blessing: createBlessing(
       'ignite_blessing',
@@ -332,7 +333,7 @@ const createItemInspiredBlessings = () => {
           // Find random tile to ignite
           const board = state.board;
           const validTiles = [];
-          
+
           for (let row = 0; row < board.length; row++) {
             for (let col = 0; col < board[row].length; col++) {
               if (!board[row][col].isIgnited && board[row][col].color !== 'empty') {
@@ -340,7 +341,7 @@ const createItemInspiredBlessings = () => {
               }
             }
           }
-          
+
           if (validTiles.length > 0) {
             const randomTile = validTiles[Math.floor(Math.random() * validTiles.length)];
             state.updateTile(randomTile.row, randomTile.col, { isIgnited: true });
@@ -357,7 +358,7 @@ const createItemInspiredBlessings = () => {
       3
     )
   };
-  
+
   return ITEM_INSPIRED_BLESSINGS;
 };
 
@@ -405,35 +406,18 @@ export const BLUE_BLESSINGS: Record<string, Blessing> = {
   frost_nova: createBlessing(
     'frost_nova',
     'Frost Nova',
-    'Freeze 3 random tiles for 2 turns',
+      'Freeze 3 random tiles',
     'blue',
     4,
     {
       onActivate: (state: GameState) => {
         const board = state.board;
-        const tiles = [];
-        
-        // Get all non-frozen, non-empty tiles
-        for (let row = 0; row < board.length; row++) {
-          for (let col = 0; col < board[row].length; col++) {
-            if (!board[row][col].isFrozen && board[row][col].color !== 'empty') {
-              tiles.push({ row, col });
-            }
-          }
-        }
-        
-        // Randomly select 3 tiles
-        for (let i = 0; i < Math.min(3, tiles.length); i++) {
-          const randomIndex = Math.floor(Math.random() * tiles.length);
-          const { row, col } = tiles[randomIndex];
-          
-          // Remove the selected tile to avoid duplicates
-          tiles.splice(randomIndex, 1);
-          
-          // Freeze the tile
-          state.updateTile(row, col, { isFrozen: true });
-        }
-        
+
+        const selectedTiles = TileHelpers.selectRandom(board, 3, {excludeFrozen: true});
+        selectedTiles.forEach((t) => {
+          state.updateTile(t.row, t.col, {isFrozen: true});
+        });
+
         toast.success('Frost Nova froze 3 tiles!');
       },
       turnsRemaining: 2
@@ -450,7 +434,7 @@ export const BLUE_BLESSINGS: Record<string, Blessing> = {
       onActivate: (state: GameState) => {
         const player = state.currentPlayer;
         const blueResources = state[player].matchedColors.blue;
-        
+
         state[player].matchedColors.blue = blueResources * 2;
         toast.success(`Mana Flow doubled your blue resources to ${state[player].matchedColors.blue}!`);
       }
@@ -490,29 +474,13 @@ export const GREEN_BLESSINGS: Record<string, Blessing> = {
     {
       onActivate: (state: GameState) => {
         const board = state.board;
-        const tiles = [];
-        
-        // Get all non-green, non-empty tiles
-        for (let row = 0; row < board.length; row++) {
-          for (let col = 0; col < board[row].length; col++) {
-            if (board[row][col].color !== 'green' && board[row][col].color !== 'empty') {
-              tiles.push({ row, col });
-            }
-          }
-        }
-        
-        // Randomly select 2 tiles
-        for (let i = 0; i < Math.min(2, tiles.length); i++) {
-          const randomIndex = Math.floor(Math.random() * tiles.length);
-          const { row, col } = tiles[randomIndex];
-          
-          // Remove the selected tile to avoid duplicates
-          tiles.splice(randomIndex, 1);
-          
+        // Randomly select 2 tiles using TileHelpers.selectRandom
+        const selectedTiles = TileHelpers.selectRandom(board, 2, {excludeColors: ['green']});
+        selectedTiles.forEach(({row, col}) => {
           // Change the tile to green
-          state.updateTile(row, col, { color: 'green' });
-        }
-        
+          state.updateTile(row, col, {color: 'green'});
+        });
+
         toast.success('Wild Growth converted 2 tiles to green!');
       }
     }
@@ -591,13 +559,13 @@ export const BLACK_BLESSINGS: Record<string, Blessing> = {
         const player = state.currentPlayer;
         const opponent = player === 'human' ? 'ai' : 'human';
         const colors: Color[] = ['red', 'blue', 'green', 'yellow', 'black'];
-        
+
         colors.forEach(color => {
           const stealAmount = Math.min(3, state[opponent].matchedColors[color]);
           state[opponent].matchedColors[color] -= stealAmount;
           state[player].matchedColors[color] += stealAmount;
         });
-        
+
         toast.success('Void Grasp stole resources from your opponent!');
       }
     }
@@ -621,15 +589,15 @@ export const BLACK_BLESSINGS: Record<string, Blessing> = {
         onActivate: (state: GameState) => {
           const player = state.currentPlayer;
           const opponent = player === 'human' ? 'ai' : 'human';
-          
+
           // Deal damage to opponent
           state[opponent].health = Math.max(0, state[opponent].health - 10);
-          
+
           // Deal self-damage
           state[player].health = Math.max(0, state[player].health - 3);
-          
+
           toast.success('Dark Pact dealt 10 damage to opponent and 3 damage to you!');
-          
+
           if (state.emit) {
             state.emit('OnDamageTaken', {
               amount: 10,
@@ -696,7 +664,7 @@ export const COMMON_BLESSINGS: Record<string, Blessing> = {
         const primaryColor = getPrimaryColor(state, player);
         const board = state.board;
         const tiles = [];
-        
+
         // Get all non-primary-color, non-empty tiles
         for (let row = 0; row < board.length; row++) {
           for (let col = 0; col < board[row].length; col++) {
@@ -705,11 +673,11 @@ export const COMMON_BLESSINGS: Record<string, Blessing> = {
             }
           }
         }
-        
+
         if (tiles.length > 0) {
           const randomIndex = Math.floor(Math.random() * tiles.length);
           const { row, col } = tiles[randomIndex];
-          
+
           // Change the tile to the primary color
           state.updateTile(row, col, { color: primaryColor });
           toast.success(`Converted a tile to ${primaryColor}!`);
@@ -734,12 +702,12 @@ export const REACTIVE_BLESSINGS: Record<string, Blessing> = {
       onTrigger: (state: GameState, event: GameEventPayload) => {
         const payload = event as any;
         if (payload.target !== state.currentPlayer) return; // Only trigger when we're the target
-        
+
         const target = state.currentPlayer === 'human' ? 'ai' : 'human';
         const damage = 3;
         state[target].health = Math.max(0, state[target].health - damage);
         toast.success(`Retribution! Dealt ${damage} damage to opponent!`);
-        
+
         if (state.emit) {
           state.emit('OnDamageDealt', {
             amount: damage,
@@ -762,7 +730,7 @@ export const REACTIVE_BLESSINGS: Record<string, Blessing> = {
       onTrigger: (state: GameState, event: GameEventPayload) => {
         const matchEvent = event as any;
         if (matchEvent.player !== state.currentPlayer) return;
-        
+
         // Check if any green tiles were matched
         if (matchEvent.colors && matchEvent.colors.green > 0) {
           const player = state.currentPlayer;
@@ -784,7 +752,7 @@ export const REACTIVE_BLESSINGS: Record<string, Blessing> = {
       onTrigger: (state: GameState, event: GameEventPayload) => {
         const payload = event as any;
         if (payload.target !== state.currentPlayer) return; // Only trigger when we're the target
-        
+
         const player = state.currentPlayer;
         const defenseAmount = 2;
         state[player].defense += defenseAmount;

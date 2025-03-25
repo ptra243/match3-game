@@ -1,6 +1,6 @@
-import { Color } from '../../types';
-import { EffectDefinition, TilePosition } from './effects';
-import { Effects, selectPattern, selectRandom } from './index';
+import {Color} from '../../types';
+import {EffectDefinition, TilePosition} from './effects';
+import {Effects, selectPattern, selectRandom} from './index';
 
 /**
  * Examples of skills that use the tile selection helper functions
@@ -19,7 +19,7 @@ export function createFireblastSkill(): EffectDefinition {
       }
       
       // Step 1: Select tiles in a diamond pattern
-      const targetTiles = selectPattern(state, row, col, 'diamond', 2);
+      const targetTiles = selectPattern(state.board, row, col, 'diamond', 2);
       
       // Step 2: Ignite the selected tiles
       await Effects.ignite(targetTiles.length, targetTiles).execute(state);
@@ -45,7 +45,7 @@ export function createFrostBeamSkill(): EffectDefinition {
       }
       
       // Step 1: Select tiles in a cross pattern
-      const targetTiles = selectPattern(state, row, col, 'cross', 3);
+      const targetTiles = selectPattern(state.board, row, col, 'cross', 3);
       
       // Step 2: Freeze the selected tiles
       await Effects.freeze(targetTiles.length, targetTiles).execute(state);
@@ -67,7 +67,7 @@ export function createNaturesBlessingSkill(): EffectDefinition {
     description: 'Convert random tiles to green and heal based on the number converted',
     execute: async (state) => {
       // Step 1: Select 5 random non-green, non-empty tiles
-      const targetTiles = selectRandom(state, 5, { 
+      const targetTiles = selectRandom(state.board, 5, {
         excludeColors: ['green', 'empty'],
         excludeFrozen: true
       });
@@ -103,16 +103,16 @@ export function createElementalMasterySkill(): EffectDefinition {
       };
       
       // Step 1: Get random tiles of each color
-      const redTiles = selectRandom(state, 3, { colors: ['red'] });
+      const redTiles = selectRandom(state.board, 3, {colors: ['red']});
       results.redTiles = redTiles.length;
-      
-      const blueTiles = selectRandom(state, 3, { colors: ['blue'] });
+
+      const blueTiles = selectRandom(state.board, 3, {colors: ['blue']});
       results.blueTiles = blueTiles.length;
-      
-      const greenTiles = selectRandom(state, 3, { colors: ['green'] });
+
+      const greenTiles = selectRandom(state.board, 3, {colors: ['green']});
       results.greenTiles = greenTiles.length;
-      
-      const yellowTiles = selectRandom(state, 3, { colors: ['yellow'] });
+
+      const yellowTiles = selectRandom(state.board, 3, {colors: ['yellow']});
       results.yellowTiles = yellowTiles.length;
       
       // Step 2: Apply different effects based on the tiles
@@ -151,7 +151,7 @@ export function createChaosStormSkill(centerColor: Color = 'red'): EffectDefinit
     description: `Create a storm of chaotic energy centered on a ${centerColor} tile`,
     execute: async (state) => {
       // Step 1: Find a random tile of the center color
-      const centerTiles = selectRandom(state, 1, { 
+      const centerTiles = selectRandom(state.board, 1, {
         colors: [centerColor],
         excludeFrozen: true,
         excludeIgnited: true 
@@ -166,7 +166,7 @@ export function createChaosStormSkill(centerColor: Color = 'red'): EffectDefinit
       
       // Step 2: Select tiles in a square pattern around the center
       const affectedArea = selectPattern(
-        state, 
+          state.board,
         centerTile.row, 
         centerTile.col, 
         'square', 
