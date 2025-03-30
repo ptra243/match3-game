@@ -358,7 +358,6 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
             await get().markTilesAsMatched(matched);
             // Calculate and apply damage
             const opponent = currentPlayer === 'human' ? 'ai' : 'human';
-            let totalDamage = 0;
 
             // Calculate damage based on player's color stats
             const calculateMatchDamage = (match: Match) => {
@@ -399,8 +398,7 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
                     colorStat: get()[currentPlayer].colorStats[match.color],
                     damage
                 });
-                totalDamage += damage;
-
+                get().takeDamage(currentPlayer, opponent, damage, true);
                 // Trigger onMatch effects for items
                 const player = get()[currentPlayer];
                 Object.values(player.equippedItems).forEach(item => {
@@ -414,11 +412,6 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
                 });
             });
 
-            // Apply damage using the new takeDamage function
-            // Match damage is direct damage
-            if (totalDamage > 0) {
-                get().takeDamage(currentPlayer, opponent, totalDamage, true);
-            }
 
             // Add matched resources to the current player
             const resourceMultiplier = get()[currentPlayer].statusEffects.reduce(
@@ -428,7 +421,7 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
             // Apply resource conversion effect if present
             const conversionEffect = get()[currentPlayer].statusEffects.find(effect => effect.manaConversion);
 
-            // Update player's matched colors (resources)
+            // Update player's matched colors (resources) in a single state update
             set(state => {
                 const updatedMatchedColors = {...state[currentPlayer].matchedColors};
 
@@ -517,7 +510,9 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
 
             const deadTiles = matched.map(tile => ({row: tile.row, col: tile.col}));
             debugLog('MATCH_SLICE', 'Matches processed, calculating fall-in', {
-                deadTiles: deadTiles.length
+                deadTiles: deadTiles.length,
+                matchedTiles: matched.length,
+                animationCount: get().activeAnimations.size
             });
         }
 

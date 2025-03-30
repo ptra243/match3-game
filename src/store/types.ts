@@ -4,6 +4,8 @@ import { GameSlice } from './slices/gameSlice';
 import { BoardSlice } from './slices/boardSlice';
 import { PlayerSlice } from './slices/playerSlice';
 import { MatchSlice } from './slices/matchSlice';
+import { BlessingSlice } from './slices/blessingSlice';
+import { ItemSlice } from './slices/itemSlice';
 
 export type Color = 'red' | 'green' | 'blue' | 'yellow' | 'black' | 'empty';
 
@@ -173,7 +175,9 @@ export interface GameState extends
   GameSlice, 
   BoardSlice, 
   PlayerSlice, 
-  MatchSlice {
+  MatchSlice,
+  BlessingSlice,
+  ItemSlice {
   // Additional state properties
   activeAnimations: Map<string, AnimationInfo>;
   sequences: Map<string, AnimationSequence>;
@@ -182,24 +186,11 @@ export interface GameState extends
   ai: PlayerState;
   selectedTile: { row: number; col: number } | null;
   
-  // Item reward system
-  showItemReward: boolean;
-  itemRewardOptions: string[];
-  itemRewardCost: { color: Color; amount: number };
-  setItemReward: (options: string[], cost: { color: Color; amount: number }) => void;
-  clearItemReward: () => void;
-  selectItemReward: (itemId: string) => void;
-  
-  // Blessing system
-  availableBlessings: Blessing[];
-  purchaseBlessing: (blessingId: string) => void;
-  
   // Battle progression
   battleState: BattleState;
   startNewBattle: () => void;
   endBattle: (winner: Player) => void;
   offerPostBattleReward: () => void;
-  convertBlessingsToItem: () => void;
 }
 
 export interface GameStore extends GameState {

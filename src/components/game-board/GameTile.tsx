@@ -3,7 +3,6 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { useGameStore } from '../../store/gameStore';
 import { Tile, Color } from '../../store/types';
 import { TileIcon } from './TileIcon';
-import { CLASSES } from '../../store/classes';
 import { ALL_SKILLS } from '../../store/skills';
 import { toast } from 'react-hot-toast';
 import { debugLog } from '../../store/slices/debug';
@@ -51,6 +50,17 @@ export const GameTile: React.FC<GameTileProps> = ({
 
   const tileId = `tile-${row}-${col}`;
   const currentAnimation = getCurrentAnimation(tileId);
+
+  // Log whenever currentAnimation changes
+  React.useEffect(() => {
+    if (currentAnimation) {
+      debugLog('GAME_TILE', `Animation state changed for tile [${row},${col}]:`, {
+        type: currentAnimation.type,
+        status: currentAnimation.status,
+        id: currentAnimation.id
+      });
+    }
+  }, [currentAnimation, row, col]);
 
   // Handle animation completion
   const handleAnimationEnd = (e: React.AnimationEvent) => {
@@ -110,6 +120,10 @@ export const GameTile: React.FC<GameTileProps> = ({
   // Determine animation classes
   const getAnimationClass = () => {
     if (!currentAnimation) return '';
+    // Only log when animation starts
+    if (currentAnimation.type === 'explode' || currentAnimation.type === 'fallIn') {
+      debugLog('GAME_TILE', `Animation class for tile [${row},${col}]: ${currentAnimation.type}`);
+    }
     switch (currentAnimation.type) {
       case 'explode':
         return 'ring-4 ring-white ring-opacity-75 animate-explode';
@@ -122,17 +136,22 @@ export const GameTile: React.FC<GameTileProps> = ({
 
   // Determine if tile should be visually empty (no color during animation)
   const shouldBeEmpty = () => {
-    // Only be empty when tile color is empty and not animating
     return tile.color === 'empty' && !tile.isAnimating;
   };
 
   // Get the correct color to display for the tile icon
   const getDisplayColor = () => {
-    // When falling in, use the animation metadata color if available
     if (currentAnimation?.type === 'fallIn' && currentAnimation.metadata?.color) {
       return currentAnimation.metadata.color as Color;
     }
     return tile.color;
+  };
+
+  const handleAnimationStart = () => {
+    // Only log for important animations
+    if (currentAnimation?.type === 'explode' || currentAnimation?.type === 'fallIn') {
+      debugLog('GAME_TILE', `Animation started for tile [${row},${col}]: ${currentAnimation.type}`);
+    }
   };
 
   return (
@@ -160,6 +179,7 @@ export const GameTile: React.FC<GameTileProps> = ({
       ${isSkillActive && canTargetWithSkill && isHumanTurn && !currentAnimation ? 'cursor-pointer hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-50' : ''}
       transition-all duration-300`}
     onAnimationEnd={handleAnimationEnd}
+    onAnimationStart={handleAnimationStart}
   >
       {!shouldBeEmpty() && <TileIcon color={getDisplayColor()} />}
       

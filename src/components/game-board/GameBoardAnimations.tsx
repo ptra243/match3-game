@@ -22,6 +22,9 @@ export const GameBoardAnimations: React.FC = () => {
           0% {
             transform: translateY(-50px);
           }
+          50% {
+            transform: translateY(-25px);
+          }
           100% {
             transform: translateY(0);
           }

@@ -39,19 +39,22 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       const id = generateId();
       debugLog('ANIMATION', `Registering animation ${type}`, { id, elementIds, metadata });
       
+      // Create the animation info
+      const animationInfo: AnimationInfo = {
+        id,
+        type,
+        status: 'pending' as const,
+        elementIds,
+        startTime: Date.now(),
+        duration: type === 'explode' ? 300 : type === 'fallIn' ? 300 : 200,
+        metadata
+      };
+
+      // Register the animation
       set((state) => {
-        const newActiveAnimations = new Map(state.activeAnimations);
-        newActiveAnimations.set(id, {
-          id,
-          type,
-          status: 'pending',
-          elementIds,
-          startTime: Date.now(),
-          duration: type === 'explode' ? 300 : type === 'fallIn' ? 300 : 200,
-          metadata
-        });
-        
-        return { activeAnimations: newActiveAnimations };
+        // Use Immer's draft state to modify the Map
+        state.activeAnimations.set(id, animationInfo);
+        return state;
       });
       
       return id;
@@ -80,18 +83,22 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
     
     startAnimation: (id: string) => {
       debugLog('ANIMATION', `Starting animation ${id}`);
-      set((state) => {
-        const animation = state.activeAnimations.get(id);
-        if (!animation) return state;
+      
+      // Get the current state to check if animation exists
+      const animation = get().activeAnimations.get(id);
+      if (!animation) {
+        debugLog('ANIMATION', `No animation found for id ${id}`);
+        return;
+      }
 
-        const newActiveAnimations = new Map(state.activeAnimations);
-        newActiveAnimations.set(id, {
+      set((state) => {
+        // Use Immer's draft state to modify the Map
+        state.activeAnimations.set(id, {
           ...animation,
           status: 'running',
           startTime: Date.now()
         });
-        
-        return { activeAnimations: newActiveAnimations };
+        return state;
       });
     },
     
@@ -101,23 +108,22 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       if (!animation) return;
 
       set((state) => {
-        const newActiveAnimations = new Map(state.activeAnimations);
-        newActiveAnimations.set(id, {
+        // Use Immer's draft state to modify the Map
+        state.activeAnimations.set(id, {
           ...animation,
           status: 'failed'
         });
-        
-        return { activeAnimations: newActiveAnimations };
+        return state;
       });
     }
   };
 
   return {
-    activeAnimations: new Map(),
-    sequences: new Map(),
+    // Initialize Maps in the slice
+    activeAnimations: new Map<string, AnimationInfo>(),
+    sequences: new Map<string, AnimationSequence>(),
 
     registerAnimation: sliceInternals.registerAnimation,
-
     startAnimation: sliceInternals.startAnimation,
 
     completeAnimation: (id) => {
@@ -126,30 +132,25 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       if (!animation) return;
 
       set((state) => {
-        const newActiveAnimations = new Map(state.activeAnimations);
-        newActiveAnimations.set(id, {
+        // Use Immer's draft state to modify the Map
+        state.activeAnimations.set(id, {
           ...animation,
           status: 'completed'
         });
-        
-        return { activeAnimations: newActiveAnimations };
-      });
 
-      // Check if this animation is part of a sequence
-      get().sequences.forEach((sequence, sequenceId) => {
-        if (sequence.animations.find((a) => a.id === id)) {
-          const allCompleted = sequence.animations.every(
-            (a) => get().activeAnimations.get(a.id)?.status === 'completed'
-          );
-          if (allCompleted) {
-            sequence.onComplete?.();
-            set((state) => {
-              const newSequences = new Map(state.sequences);
-              newSequences.delete(sequenceId);
-              return { sequences: newSequences };
-            });
+        // Check if this animation is part of a sequence
+        state.sequences.forEach((sequence, sequenceId) => {
+          if (sequence.animations.find((a) => a.id === id)) {
+            const allCompleted = sequence.animations.every(
+              (a) => state.activeAnimations.get(a.id)?.status === 'completed'
+            );
+            if (allCompleted) {
+              sequence.onComplete?.();
+              state.sequences.delete(sequenceId);
+            }
           }
-        }
+        });
+        return state;
       });
     },
 
@@ -162,16 +163,15 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       }));
 
       set((state) => {
-        const newSequences = new Map(state.sequences);
-        newSequences.set(id, {
+        // Use Immer's draft state to modify the Map
+        state.sequences.set(id, {
           id,
           animations: animationInfos,
           status: 'pending',
           onComplete,
           onError
         });
-        
-        return { sequences: newSequences };
+        return state;
       });
     },
 
@@ -191,9 +191,9 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
         sequence.onError?.(error as Error);
       } finally {
         set((state) => {
-          const newSequences = new Map(state.sequences);
-          newSequences.delete(id);
-          return { sequences: newSequences };
+          // Use Immer's draft state to modify the Map
+          state.sequences.delete(id);
+          return state;
         });
       }
     },
@@ -210,9 +210,9 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       });
 
       set((state) => {
-        const newSequences = new Map(state.sequences);
-        newSequences.delete(id);
-        return { sequences: newSequences };
+        // Use Immer's draft state to modify the Map
+        state.sequences.delete(id);
+        return state;
       });
     },
 

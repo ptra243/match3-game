@@ -775,11 +775,6 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
           health: Math.max(0, state[defender].health - totalDamage)
         }
       }));
-      
-      // Only show toast for direct damage to avoid spamming
-      if (isDirectDamage) {
-        toast.success(`Dealt ${totalDamage} damage${isSkillDamage ? ' with skill' : ''}!`);
-      }
     }
     
     return totalDamage;

@@ -5,6 +5,7 @@ import { ClassSelection } from './components/ClassSelection';
 import BlessingPanel from './components/BlessingPanel';
 import { useGameStore } from './store/gameStore';
 import { Toaster } from 'react-hot-toast';
+import { DebugLogger } from './components/DebugLogger';
 
 function App() {
   const { human, ai, resetGame } = useGameStore();
@@ -64,6 +65,7 @@ function App() {
             </div>
           </>
         )}
+        <DebugLogger />
       </div>
     </div>
   );

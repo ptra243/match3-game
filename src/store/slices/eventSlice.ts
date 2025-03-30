@@ -97,18 +97,15 @@ export const createEventSlice: StateCreator<GameState, [], [], EventSlice> = (se
     
     on: (eventType, handler) => {
       set((state) => {
-        const newEvents = new Map(state.events);
-        
-        if (!newEvents.has(eventType)) {
-          newEvents.set(eventType, new Set());
+        if (!state.events.has(eventType)) {
+          state.events.set(eventType, new Set());
         }
         
-        const handlers = newEvents.get(eventType)!;
+        const handlers = state.events.get(eventType)!;
         handlers.add(handler);
         
         debugLog('EVENT_SLICE', `Registered handler for ${eventType}`);
-        
-        return { events: newEvents };
+        return state;
       });
       
       // Return function to unsubscribe
@@ -117,37 +114,34 @@ export const createEventSlice: StateCreator<GameState, [], [], EventSlice> = (se
     
     off: (eventType, handler) => {
       set((state) => {
-        const newEvents = new Map(state.events);
-        
-        if (newEvents.has(eventType)) {
-          const handlers = newEvents.get(eventType)!;
+        if (state.events.has(eventType)) {
+          const handlers = state.events.get(eventType)!;
           handlers.delete(handler);
           
           debugLog('EVENT_SLICE', `Unregistered handler for ${eventType}`);
           
           if (handlers.size === 0) {
-            newEvents.delete(eventType);
+            state.events.delete(eventType);
           }
         }
-        
-        return { events: newEvents };
+        return state;
       });
     },
     
     addMiddleware: (middleware) => {
-      set((state) => ({
-        middleware: [...state.middleware, middleware]
-      }));
-      
-      debugLog('EVENT_SLICE', 'Added event middleware');
+      set((state) => {
+        state.middleware.push(middleware);
+        debugLog('EVENT_SLICE', 'Added event middleware');
+        return state;
+      });
       
       // Return function to remove middleware
       return () => {
-        set((state) => ({
-          middleware: state.middleware.filter(m => m !== middleware)
-        }));
-        
-        debugLog('EVENT_SLICE', 'Removed event middleware');
+        set((state) => {
+          state.middleware = state.middleware.filter(m => m !== middleware);
+          debugLog('EVENT_SLICE', 'Removed event middleware');
+          return state;
+        });
       };
     },
     
