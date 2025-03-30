@@ -24,7 +24,7 @@ const MobileBlessingCard: React.FC<{
                     <h4 className="text-white font-medium text-[10px] truncate">{blessing.name}</h4>
                 </div>
                 <span className={`text-[10px] ml-1 flex-shrink-0 ${hasEnoughResources ? 'text-white' : 'text-red-400'}`}>
-                    {blessing.cost}
+                    {blessing.cost[blessing.color]}
                 </span>
             </div>
 
@@ -113,7 +113,7 @@ export const MobileBlessingPanel: React.FC = () => {
                 <div className="overflow-x-auto px-4" ref={scrollContainerRef}>
                     <div className="flex space-x-1 py-0.5" style={{minWidth: 'max-content'}}>
                         {availableBlessings.map((blessing) => {
-                            const hasEnoughResources = playerResources[blessing.color] >= blessing.cost;
+                            const hasEnoughResources = playerResources[blessing.color] >= blessing.cost[blessing.color];
 
                             return (
                                 <div key={blessing.id} className="w-20">

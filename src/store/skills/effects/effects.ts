@@ -1,8 +1,8 @@
-import {Color, GameState, Player, StatusEffect, Tile} from '../../types';
+import {Color, GameState, Player, StatusEffect, Tile, PlayerType} from '../../types';
 import {toast} from 'react-hot-toast';
 import {debugLog} from '../../slices/debug';
 import {StatusEffectBuilder} from './statusBuilder';
-import {TileHelpers} from "./TileHelpers.ts";
+import {TileHelpers} from "../../actions/board/TileHelpers.ts";
 
 // Interface for effect definitions
 export interface EffectDefinition {
@@ -75,7 +75,7 @@ export const Effects = {
   dealDamage: (amount: number, isDirectDamage = true, isSkillDamage = true): EffectDefinition => ({
     type: 'dealDamage',
     description: `Deal ${amount} damage`,
-    execute: async (state, sourcePlayer?: Player, targetPlayer?: Player) => {
+    execute: async (state, sourcePlayer?: PlayerType, targetPlayer?: PlayerType) => {
       const source = sourcePlayer || state.currentPlayer;
       const target = targetPlayer || (source === 'human' ? 'ai' : 'human');
       
@@ -114,7 +114,7 @@ export const Effects = {
   selfDamage: (amount: number, isSkillDamage = true): EffectDefinition => ({
     type: 'selfDamage',
     description: `Take ${amount} damage`,
-    execute: async (state, player?: Player) => {
+    execute: async (state, player?: PlayerType) => {
       const target = player || state.currentPlayer;
       const damage = state.takeDamage(target, target, amount, false, isSkillDamage);
       debugLog('EFFECT', `Self-inflicted ${damage} damage to ${target}`);
@@ -126,7 +126,7 @@ export const Effects = {
   heal: (amount: number): EffectDefinition => ({
     type: 'heal',
     description: `Heal ${amount} health`,
-    execute: async (state, player?: Player) => {
+    execute: async (state, player?: PlayerType) => {
       const target = player || state.currentPlayer;
       state[target].health += amount;
       debugLog('EFFECT', `Healed ${target} for ${amount}`);
@@ -263,7 +263,7 @@ export const Effects = {
   addStatusEffect: (effect: StatusEffect): EffectDefinition => ({
     type: 'addStatusEffect',
     description: 'Add a status effect',
-    execute: async (state, player?: Player) => {
+    execute: async (state, player?: PlayerType) => {
       const target = player || state.currentPlayer;
       state[target].statusEffects.push(effect);
       
@@ -276,7 +276,7 @@ export const Effects = {
   addDamageMultiplier: (multiplier: number, duration: number): EffectDefinition => ({
     type: 'addDamageMultiplier',
     description: `Add ${multiplier}x damage multiplier for ${duration} turns`,
-    execute: async (state, player?: Player) => {
+    execute: async (state, player?: PlayerType) => {
       const target = player || state.currentPlayer;
       
       const effect = new StatusEffectBuilder(duration)
@@ -297,7 +297,7 @@ export const Effects = {
   addResourceBonus: (matchColor: Color, bonusColor: Color, amount: number, duration: number): EffectDefinition => ({
     type: 'addResourceBonus',
     description: `Gain ${amount} ${bonusColor} resources when matching ${matchColor} for ${duration} turns`,
-    execute: async (state, player?: Player) => {
+    execute: async (state, player?: PlayerType) => {
       const target = player || state.currentPlayer;
       
       const effect = new StatusEffectBuilder(duration)
@@ -318,7 +318,7 @@ export const Effects = {
   fieryAura: (duration: number = 3): EffectDefinition => ({
     type: 'fieryAura',
     description: `Deal double damage and gain yellow mana from red matches for ${duration} turns`,
-    execute: async (state, player?: Player) => {
+    execute: async (state, player?: PlayerType) => {
       const target = player || state.currentPlayer;
       
       // Create the combined effect using the builder
@@ -345,7 +345,7 @@ export const Effects = {
   bloodSacrifice: (sacrificeAmount: number = 5, damageMultiplier: number = 2.5, duration: number = 2): EffectDefinition => ({
     type: 'bloodSacrifice',
     description: `Sacrifice ${sacrificeAmount} health to gain ${damageMultiplier}x damage for ${duration} turns`,
-    execute: async (state, player?: Player) => {
+    execute: async (state, player?: PlayerType) => {
       const target = player || state.currentPlayer;
       
       // Apply self damage

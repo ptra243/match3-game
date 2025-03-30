@@ -1,13 +1,13 @@
 ﻿import React, {useState} from 'react';
 import {useGameStore} from '../../store/gameStore';
-import {Color, Player} from '../../store/types';
+import {Color, PlayerType} from '../../store/types';
 import {CLASSES} from '../../store/classes';
 import {TileIcon} from '../game-board/TileIcon';
 import {toast} from 'react-hot-toast';
 import {ALL_SKILLS} from '../../store/skills';
 
 interface MobilePlayerIconProps {
-    player: Player;
+    player: PlayerType;
     position: 'left' | 'right';
 }
 

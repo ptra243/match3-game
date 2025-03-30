@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { Item, Player, Effect } from '../store/types';
+import { Item, Player, Effect, PlayerType } from '../store/types';
 import { GameEventType } from '../store/slices/eventSlice';
 import { Dialog } from '@headlessui/react';
 
 interface InventoryPanelProps {
-  player: Player;
+  player: PlayerType;
 }
 
 const RARITY_COLORS = {

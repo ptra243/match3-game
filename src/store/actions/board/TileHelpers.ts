@@ -1,6 +1,6 @@
 ﻿// Tile selection helper functions
 import {Color, Tile} from "../../types.ts";
-import {TilePosition} from "./effects.ts";
+import {TilePosition} from "../../skills/effects/effects.ts";
 
 export const TileHelpers = {
     /**

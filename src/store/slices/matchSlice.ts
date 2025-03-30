@@ -7,7 +7,7 @@ import {ALL_ITEMS} from '../items';
 
 // Import debug configuration
 import {debugLog} from '../slices/debug';
-import {TileHelpers} from "../skills/effects/TileHelpers.ts";
+import {TileHelpers} from "../actions/board/TileHelpers.ts";
 
 interface Match {
     color: Color;
@@ -413,15 +413,7 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
                 get().takeDamage(currentPlayer, opponent, damage, true);
                 // Trigger onMatch effects for items
                 const player = get()[currentPlayer];
-                Object.values(player.equippedItems).forEach(item => {
-                    if (item) {
-                        item.effects.forEach(effect => {
-                            if (effect.onMatch) {
-                                effect.onMatch(get(), match.color);
-                            }
-                        });
-                    }
-                });
+              
             });
 
 

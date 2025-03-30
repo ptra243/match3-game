@@ -1,15 +1,25 @@
-import {Blessing, Color, Effect, GameState} from './types';
+import {Blessing, Color, Effect, GameState, PlayerType} from './types';
 import {GameEventPayload, GameEventType} from './slices/eventSlice';
 import {toast} from 'react-hot-toast';
 import {debugLog} from './slices/debug';
 import {CLASSES} from './classes';
-import {TileHelpers} from "./skills/effects/TileHelpers.ts";
+import {TileHelpers} from "./actions/board/TileHelpers.ts";
 
 // Helper function to get primary color for a player
 const getPrimaryColor = (state: GameState, player: string): Color => {
   const className = state[player as 'human' | 'ai'].className;
   return CLASSES[className].primaryColor;
 };
+
+// Helper function to create a color stat block with default values
+const createColorStatBlock = (colorValues: Partial<Record<Color, number>>): Record<Color, number> => ({
+  red: colorValues.red || 0,
+  green: colorValues.green || 0,
+  blue: colorValues.blue || 0,
+  yellow: colorValues.yellow || 0,
+  black: colorValues.black || 0,
+  empty: 0
+});
 
 // Create blessing factory function
 const createBlessing = (
@@ -18,14 +28,21 @@ const createBlessing = (
     description: string,
     color: Color,
     cost: number,
-  effects: Effect[] | Effect,
-  duration?: number
+    effects: Effect[] | Effect,
+    duration?: number
 ): Blessing => ({
   id,
   name,
   description,
   color,
-  cost,
+  cost: {
+    red: color === 'red' ? cost : 0,
+    green: color === 'green' ? cost : 0,
+    blue: color === 'blue' ? cost : 0,
+    yellow: color === 'yellow' ? cost : 0,
+    black: color === 'black' ? cost : 0,
+    empty: 0
+  },
   effects: Array.isArray(effects) ? effects : [effects],
   duration
 });
@@ -41,7 +58,7 @@ const createDamageEffect = (amount: number, triggerType: 'immediate' | GameEvent
     if (state.emit) {
       state.emit('OnDamageTaken', {
         amount,
-        source: state.currentPlayer,
+        source: state.currentPlayer as PlayerType,
         target,
         damageType: 'normal'
       });
@@ -58,7 +75,7 @@ const createDamageEffect = (amount: number, triggerType: 'immediate' | GameEvent
     if (state.emit) {
       state.emit('OnDamageTaken', {
         amount,
-        source: state.currentPlayer,
+        source: state.currentPlayer as PlayerType,
         target,
         damageType: 'normal'
       });
@@ -124,7 +141,7 @@ const createResourceMultiplierEffect = (multiplier: number, turns: number): Effe
   onActivate: (state: GameState) => {
     toast.success(`Resource gain increased by ${Math.round((multiplier - 1) * 100)}% for ${turns} turns!`);
   }
-});
+}); 
 
 // Create blessings inspired by items
 const createItemInspiredBlessings = () => {
@@ -393,7 +410,7 @@ export const RED_BLESSINGS: Record<string, Blessing> = {
     [
       createDamageEffect(8),
       {
-        colorStats: { red: 1 }
+        colorStats: createColorStatBlock({ red: 1 })
       }
     ]
   ),
@@ -449,7 +466,7 @@ export const BLUE_BLESSINGS: Record<string, Blessing> = {
     [
       createDefenseEffect(5, 3),
       {
-        colorStats: { blue: 1 }
+        colorStats: createColorStatBlock({ blue: 1 })
       }
     ],
     3
@@ -501,7 +518,7 @@ export const GREEN_BLESSINGS: Record<string, Blessing> = {
         }
       },
       {
-        colorStats: { green: 1 }
+        colorStats: createColorStatBlock({ green: 1 })
       }
     ]
   ),
@@ -538,7 +555,7 @@ export const YELLOW_BLESSINGS: Record<string, Blessing> = {
     [
       createDamageEffect(6),
       {
-        colorStats: { yellow: 1 }
+        colorStats: createColorStatBlock({ yellow: 1 })
       }
     ]
   ),
@@ -601,7 +618,7 @@ export const BLACK_BLESSINGS: Record<string, Blessing> = {
           if (state.emit) {
             state.emit('OnDamageTaken', {
               amount: 10,
-              source: player,
+              source: player as PlayerType,
               target: opponent,
               damageType: 'normal'
             });
@@ -609,7 +626,7 @@ export const BLACK_BLESSINGS: Record<string, Blessing> = {
         }
       },
       {
-        colorStats: { black: 2 }
+        colorStats: createColorStatBlock({ black: 2 })
       }
     ]
   )
@@ -711,7 +728,7 @@ export const REACTIVE_BLESSINGS: Record<string, Blessing> = {
         if (state.emit) {
           state.emit('OnDamageDealt', {
             amount: damage,
-            source: state.currentPlayer,
+            source: state.currentPlayer as PlayerType,
             target,
             damageType: 'normal'
           });

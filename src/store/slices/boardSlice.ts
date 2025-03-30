@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand';
 import { Color, GameState, Tile } from '../types';
 import { debugLog } from '../slices/debug';
 import { GAME_CONSTANTS, GAME_FLOW } from '../gameRules';
-import { TileHelpers } from '../skills/effects/TileHelpers';
+import { TileHelpers } from '../actions/board/TileHelpers';
 
 const BOARD_SIZE = GAME_CONSTANTS.BOARD_SIZE;
 const COLORS = GAME_CONSTANTS.AVAILABLE_COLORS;

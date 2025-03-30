@@ -16,11 +16,10 @@ const getEffectDescription = (effect: Effect): string => {
   const parts: string[] = [];
   
   if (effect.colorStats) {
-    Object.entries(effect.colorStats).forEach(([color, value]) => {
-      if (value) {
-        parts.push(`+${value} ${color} damage`);
-      }
-    });
+    const colorStatsDesc = formatColorStats(effect.colorStats);
+    if (colorStatsDesc) {
+      parts.push(colorStatsDesc);
+    }
   }
   
   if (effect.defense) {
@@ -66,6 +65,21 @@ const getTriggerText = (triggerType?: string): string => {
   }
 };
 
+// Helper function to format color stats into a readable string
+const formatColorStats = (colorStats: Record<Color, number>): string => {
+  const stats = Object.entries(colorStats)
+    .filter(([color, value]) => value > 0 && color !== 'empty')
+    .map(([color, value]) => `+${value} ${color}`)
+    .join(', ');
+  return stats;
+};
+
+// Helper function to check if a blessing has color stats
+const hasColorStats = (effect: Effect): boolean => {
+  return effect.colorStats !== undefined && 
+    Object.values(effect.colorStats).some(value => value > 0);
+};
+
 // Individual blessing card with details on hover/touch
 const BlessingCard: React.FC<{ 
   blessing: Blessing, 
@@ -88,7 +102,7 @@ const BlessingCard: React.FC<{
           <h4 className="text-white font-medium text-xs truncate">{blessing.name}</h4>
         </div>
         <span className={`text-xs ml-2 flex-shrink-0 ${hasEnoughResources ? 'text-white' : 'text-red-400'}`}>
-          {blessing.cost}
+          {blessing.cost[blessing.color]}
         </span>
       </div>
       
@@ -181,7 +195,7 @@ const BlessingPanel: React.FC = () => {
       
       <div className="flex gap-1">
         {availableBlessings.map((blessing) => {
-          const hasEnoughResources = playerResources[blessing.color] >= blessing.cost;
+          const hasEnoughResources = playerResources[blessing.color] >= blessing.cost[blessing.color];
           
           return (
             <div key={blessing.id} className="flex-1">

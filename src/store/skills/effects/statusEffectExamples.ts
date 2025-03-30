@@ -274,4 +274,41 @@ export function createSimpleDebuff(): EffectDefinition {
     },
     resourceMultiplier: 0.75 // 25% less resources
   }, 'Weakness', 'opponent');
+}
+
+// Example of a status effect that heals at the start of each turn
+export function createRegenerationEffect(healAmount: number = 3, duration: number = 3): EffectDefinition {
+  return new StatusEffectBuilder(duration)
+    .addOnTurnStart((state, player) => {
+      // Heal the player at the start of each turn
+      const playerState = state[player];
+      playerState.health = Math.min(100, playerState.health + healAmount);
+      debugLog('EFFECT', `${player} regenerated ${healAmount} health`);
+    })
+    .buildSkillEffect(`Regeneration (${healAmount} HP per turn)`);
+}
+
+// Example of a status effect that converts matched colors at the start of each turn
+export function createColorConversionEffect(
+  fromColor: Color,
+  toColor: Color,
+  amount: number = 2,
+  duration: number = 2
+): EffectDefinition {
+  return new StatusEffectBuilder(duration)
+    .addOnTurnStart((state, player) => {
+      const playerState = state[player];
+      const fromAmount = playerState.matchedColors[fromColor];
+      const convertAmount = Math.min(fromAmount, amount);
+      
+      if (convertAmount > 0) {
+        // Remove matched colors of the source color
+        playerState.matchedColors[fromColor] -= convertAmount;
+        // Add matched colors of the target color
+        playerState.matchedColors[toColor] += convertAmount;
+        
+        debugLog('EFFECT', `${player} converted ${convertAmount} ${fromColor} to ${toColor}`);
+      }
+    })
+    .buildSkillEffect(`Color Conversion (${amount} ${fromColor} → ${toColor} per turn)`);
 } 

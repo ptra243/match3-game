@@ -11,7 +11,9 @@ import { createBlessingSlice } from './slices/blessingSlice';
 import { createItemSlice } from './slices/itemSlice';
 import { createGameSlice } from './slices/gameSlice';
 import { createLoggerMiddleware } from './middleware/loggerMiddleware';
-import { Player, GameState, BattleState, AnimationInfo, AnimationSequence } from './types';
+import { createStatusEffectMiddleware } from './middleware/statusEffectMiddleware';
+import { createBlessingMiddleware } from './middleware/blessingMiddleware';
+import { Player, GameState, BattleState, AnimationInfo, AnimationSequence, PlayerType } from './types';
 import { getRandomBlessingsForColors } from './blessings';
 import { shallow } from 'zustand/shallow';
 import { StoreApi, UseBoundStore } from 'zustand';
@@ -41,12 +43,12 @@ interface GameStore extends GameState {
   waitForNextFrame: () => Promise<void>;
   resetGame: () => void;
   startNewBattle: () => void;
-  endBattle: (winner: Player) => void;
+  endBattle: (winner: PlayerType) => void;
   offerPostBattleReward: () => void;
 }
 
 // Initial values for store
-const initialState = {
+const initialState: Partial<GameState> = {
   battleState: {
     currentBattle: 1,
     maxBattles: 5,
@@ -62,7 +64,17 @@ const initialState = {
     events: new Map<GameEventType, Set<EventHandler>>(),
     middleware: []
   },
-  middleware: []
+  middleware: [],
+  turnNumber: 1,
+  isGameOver: false,
+  currentMatchSequence: 0,
+  currentCombo: 0,
+  extraTurnGranted: false,
+  matchSequence: [],
+  combo: 0,
+  extraTurn: false,
+  gameOver: false,
+  currentPlayer: 'human' as const
 };
 
 // Create the base store
@@ -79,12 +91,6 @@ const useGameStoreBase = createWithEqualityFn<GameStore>()(
         const blessingSlice = createBlessingSlice(set, get, store);
         const itemSlice = createItemSlice(set, get, store);
         const gameSlice = createGameSlice(set, get, store);
-
-        // Setup handlers for event-based blessing triggers
-        setTimeout(() => {
-          blessingSlice.setupBlessingEventHandlers();
-          itemSlice.setupItemEventHandlers();
-        }, 0);
 
         // Create the store with all slices
         const storeWithSlices = {
@@ -109,23 +115,30 @@ const useGameStoreBase = createWithEqualityFn<GameStore>()(
               state.human = createInitialPlayerState(true);
               state.ai = createInitialPlayerState(false);
               state.currentPlayer = 'human';
+              state.gameOver = false;
               state.isGameOver = false;
               state.selectedTile = null;
               state.currentMatchSequence = 0;
+              state.matchSequence = [];
               state.currentCombo = 0;
+              state.combo = 0;
               state.extraTurnGranted = false;
+              state.extraTurn = false;
+              state.turnNumber = 1;
               
               // Reset board
-              state.board = Array(8).fill(null).map(() => 
-                Array(8).fill(null).map(() => ({
-                  color: 'empty',
-                  isMatched: false,
-                  isNew: false,
-                  isAnimating: false,
-                  isFrozen: false,
-                  isIgnited: false
-                }))
-              );
+              state.board = 
+                Array(8).fill(null).map(() => 
+                  Array(8).fill(null).map(() => ({
+                    color: 'empty',
+                    isMatched: false,
+                    isNew: false,
+                    isAnimating: false,
+                    isFrozen: false,
+                    isIgnited: false
+                  }))
+                )
+              ;
               
               // Reset Maps using new Map instances
               state.animationState = {
@@ -153,13 +166,24 @@ const useGameStoreBase = createWithEqualityFn<GameStore>()(
           startNewBattle: () => {
             // Implementation for starting a new battle
           },
-          endBattle: (winner: Player) => {
+          endBattle: (winner: PlayerType) => {
             // Implementation for ending a battle
           },
           offerPostBattleReward: () => {
             // Implementation for offering a post-battle reward
           }
         };
+
+        // Setup handlers for event-based blessing triggers
+        setTimeout(() => {
+          // Add status effect middleware
+          const statusEffectMiddleware = createStatusEffectMiddleware(storeWithSlices as unknown as GameState);
+          storeWithSlices.eventState.middleware.push(statusEffectMiddleware);
+          
+          // Add blessing middleware
+          const blessingMiddleware = createBlessingMiddleware(storeWithSlices as unknown as GameState);
+          storeWithSlices.eventState.middleware.push(blessingMiddleware);
+        }, 0);
 
         // Apply logger middleware to the store
         const storeWithLogger = createLoggerMiddleware({

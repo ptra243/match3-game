@@ -4,12 +4,14 @@ import { GameSlice } from './slices/gameSlice';
 import { BoardSlice } from './slices/boardSlice';
 import { PlayerSlice } from './slices/playerSlice';
 import { MatchSlice } from './slices/matchSlice';
-import { BlessingSlice } from './slices/blessingSlice';
 import { ItemSlice } from './slices/itemSlice';
+import { BlessingSlice } from './slices/blessingSlice';
 
 export type Color = 'red' | 'green' | 'blue' | 'yellow' | 'black' | 'empty';
 
 export type AnimationType = 'explode' | 'fallIn' | 'swap' | 'bounce';
+
+export type PlayerType = 'human' | 'ai';
 
 export interface AnimationInfo {
   id: string;
@@ -38,32 +40,33 @@ export interface Tile {
   isIgnited: boolean;
 }
 
-export type Player = 'human' | 'ai';
+export interface Player {
+  health: number;
+  defense: number;
+  matchedColors: Record<Color, number>;
+  className: string;
+  activeSkillId: string | null;
+  equippedSkills: string[];
+  statusEffects: StatusEffect[];
+  skillCastCount: Record<string, number>;
+  colorStats: Record<Color, number>;
+  equippedItems: {
+    weapon: Item | null;
+    armor: Item | null;
+    accessory: Item | null;
+    trinket: Item | null;
+  };
+  inventory: Item[];
+}
 
 // New unified effect system
 export interface Effect {
-  // Stats that can be granted
-  colorStats?: Partial<Record<Color, number>>;
+  triggerType?: 'immediate' | 'OnDamageDealt' | 'OnDamageTaken' | 'StartOfTurn' | 'EndOfTurn' | 'OnMatch' | 'OnSkillCast' | 'OnResourceGained' | 'OnStatusEffectApplied' | 'OnGameOver';
+  colorStats?: Record<Color, number>;
   defense?: number;
   health?: number;
-  resourceBonus?: Partial<Record<Color, number>>;
   damageMultiplier?: number;
   resourceMultiplier?: number;
-  
-  // Callbacks for different events
-  onTurnStart?: (state: GameState) => void;
-  onTurnEnd?: (state: GameState) => void;
-  onMatch?: (state: GameState, color: Color) => void;
-  onDamageDealt?: (state: GameState, damage: number) => number;
-  onDamageTaken?: (state: GameState, damage: number) => number;
-  onActivate?: (state: GameState) => void;
-  onExpire?: (state: GameState) => void;
-  
-  // Event-based trigger system
-  triggerType?: 'immediate' | GameEventType; // When this effect should be activated
-  onTrigger?: (state: GameState, event: GameEventPayload) => void;
-  
-  // For status effects
   turnsRemaining?: number;
   extraTurn?: boolean;
   resourceConversion?: {
@@ -75,6 +78,9 @@ export interface Effect {
     count: number;
     color: Color;
   };
+  onActivate?: (state: any) => void;
+  onTrigger?: (state: any, payload: any) => void;
+  onExpire?: (state: any) => void;
 }
 
 export interface StatusEffect {
@@ -100,6 +106,9 @@ export interface StatusEffect {
     color: Color;
   };
   onExpire?: () => void;
+  onTurnStart?: (state: GameState, player: PlayerType) => void;
+  type?: string;
+  strength?: number;
 }
 
 export interface ClassSkill {
@@ -155,9 +164,9 @@ export interface Blessing {
   name: string;
   description: string;
   color: Color;
-  cost: number;
+  cost: Record<Color, number>;
   effects: Effect[];
-  duration?: number; // How many turns the blessing lasts, undefined means permanent
+  duration?: number;
 }
 
 export interface BattleState {
@@ -168,7 +177,23 @@ export interface BattleState {
   aiWins: number;
 }
 
-// Combine all slices into the GameState interface
+export interface Board {
+  rows: number;
+  cols: number;
+  tiles: Tile[][];
+}
+
+export interface Position {
+  row: number;
+  col: number;
+}
+
+export interface GameEvent {
+  type: GameEventType;
+  payload: GameEventPayload;
+  timestamp: number;
+}
+
 export interface GameState extends 
   AnimationSlice, 
   EventSlice, 
@@ -176,25 +201,25 @@ export interface GameState extends
   BoardSlice, 
   PlayerSlice, 
   MatchSlice,
-  BlessingSlice,
-  ItemSlice {
+  ItemSlice,
+  BlessingSlice {
   // Additional state properties
   animationState: {
     activeAnimations: Map<string, AnimationInfo>;
     sequences: Map<string, AnimationSequence>;
   };
-  currentPlayer: Player;
+  currentPlayer: PlayerType;
   human: PlayerState;
   ai: PlayerState;
-  selectedTile: { row: number; col: number } | null;
-  
-  // Battle progression
-  battleState: BattleState;
-  startNewBattle: () => void;
-  endBattle: (winner: Player) => void;
-  offerPostBattleReward: () => void;
+  selectedTile: Position | null;
+  turnNumber: number;
+  isGameOver: boolean;
+  currentMatchSequence: number;
+  currentCombo: number;
+  extraTurnGranted: boolean;
+  [key: string]: any; // Allow indexing with string keys
 }
 
 export interface GameStore extends GameState {
   set: (state: Partial<GameState>) => void;
-} 
+}

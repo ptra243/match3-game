@@ -34,6 +34,7 @@ export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set,
         newState.currentMatchSequence = 0;
         newState.currentCombo = 0;
         newState.extraTurnGranted = false;
+        newState.turnNumber = 1;
         
         // Reset board
         newState.board = Array(GAME_CONSTANTS.BOARD_SIZE).fill(null).map(() => 

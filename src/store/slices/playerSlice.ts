@@ -1,35 +1,38 @@
 import {StateCreator} from 'zustand';
-import {Color, GameState, Player, PlayerState} from '../types';
+import {Color, GameState, PlayerType, PlayerState} from '../types';
 import {toast} from 'react-hot-toast';
 import {CLASSES} from '../classes';
 import {ALL_SKILLS} from '../skills';
 import {debugLog} from '../slices/debug';
+import {PlayerActions} from '../actions/player/playerActions';
+import {GameFlow} from '../actions/game/gameflow';
+import {AI} from '../actions/ai/ai';
 
 export interface PlayerSlice {
   human: PlayerState;
   ai: PlayerState;
-  currentPlayer: Player;
+  currentPlayer: PlayerType;
   aiDifficulty: number; // 1-5, where 5 is the hardest
   selectedTile: { row: number; col: number } | null;
   selectTile: (row: number, col: number) => void;
-  checkSkillReadiness: (player: Player) => void;
-  toggleSkill: (player: Player, skillId: string) => void;
+  checkSkillReadiness: (player: PlayerType) => void;
+  toggleSkill: (player: PlayerType, skillId: string) => void;
   useSkill: (row: number, col: number) => Promise<void>;
   switchPlayer: () => void;
   makeAiMove: () => Promise<void>;
-  selectClass: (player: Player, className: string) => void;
-  equipSkill: (player: Player, skillId: string, slotIndex: number) => void;
+  selectClass: (player: PlayerType, className: string) => void;
+  equipSkill: (player: PlayerType, skillId: string, slotIndex: number) => void;
   setAiDifficulty: (level: number) => void;
   
   // Updated damage function signature
-  takeDamage: (attacker: Player, defender: Player, damageAmount: number, isDirectDamage: boolean, isSkillDamage?: boolean) => number;
+  takeDamage: (attacker: PlayerType, defender: PlayerType, damageAmount: number, isDirectDamage: boolean, isSkillDamage?: boolean) => number;
   
   // Item management functions
-  equipItem: (player: Player, itemId: string) => void;
-  unequipItem: (player: Player, slot: 'weapon' | 'armor' | 'accessory' | 'trinket') => void;
-  addItemToInventory: (player: Player, itemId: string) => void;
-  removeItemFromInventory: (player: Player, itemId: string) => void;
-  calculatePlayerStats: (player: Player) => void;
+  equipItem: (player: PlayerType, itemId: string) => void;
+  unequipItem: (player: PlayerType, slot: 'weapon' | 'armor' | 'accessory' | 'trinket') => void;
+  addItemToInventory: (player: PlayerType, itemId: string) => void;
+  removeItemFromInventory: (player: PlayerType, itemId: string) => void;
+  calculatePlayerStats: (player: PlayerType) => void;
 }
 
 export const createInitialPlayerState = (isHuman: boolean = false): PlayerState => {
@@ -87,541 +90,63 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
   selectedTile: null,
 
   selectTile: (row: number, col: number) => {
-    set({ selectedTile: { row, col } });
+    PlayerActions.selectTile(get(), row, col);
   },
 
-  selectClass: (player: Player, className: string) => {
-    debugLog('PLAYER_SLICE', 'selectClass called:', { player, className });
-    
-    if (!CLASSES[className]) {
-      debugLog('PLAYER_SLICE', 'Class not found:', className);
-      return;
-    }
-    
-    const classData = CLASSES[className];
-    debugLog('PLAYER_SLICE', 'Class data:', classData);
-    
-    const defaultSkills = classData.defaultSkills;
-    debugLog('PLAYER_SLICE', 'Default skills:', defaultSkills);
-    
-    // Verify that all skills exist
-    defaultSkills.forEach(skillId => {
-      const skill = ALL_SKILLS[skillId];
-      if (!skill) {
-        debugLog('PLAYER_SLICE', `Skill not found: ${skillId}`);
-      } else {
-        debugLog('PLAYER_SLICE', `Skill found: ${skillId}`, skill);
-      }
-    });
-    
-    set(state => ({
-      [player]: {
-        ...state[player],
-        className,
-        activeSkillId: null,
-        equippedSkills: defaultSkills,
-        statusEffects: []
-      }
-    }));
-    
-    debugLog('PLAYER_SLICE', `Class ${className} selected for ${player}`);
+  selectClass: (player: PlayerType, className: string) => {
+    PlayerActions.selectClass(get(), player, className);
   },
 
-  equipSkill: (player: Player, skillId: string, slotIndex: number) => {
-    if (!ALL_SKILLS[skillId]) return;
-    
-    set(state => {
-      const equippedSkills = [...state[player].equippedSkills];
-      equippedSkills[slotIndex] = skillId;
-      
-      return {
-        [player]: {
-          ...state[player],
-          equippedSkills
-        }
-      };
-    });
+  equipSkill: (player: PlayerType, skillId: string, slotIndex: number) => {
+    PlayerActions.equipSkill(get(), player, skillId, slotIndex);
   },
 
-  checkSkillReadiness: (player: Player) => {
-    const playerState = get()[player];
-    
-    playerState.equippedSkills.forEach(skillId => {
-      const skill = ALL_SKILLS[skillId];
-      if (!skill) return;
-      
-      let isReady = true;
-      // Check if player has enough resources for the skill
-      Object.entries(skill.cost).forEach(([color, cost]) => {
-        if (playerState.matchedColors[color as Color] < (cost || 0)) {
-          isReady = false;
-        }
-      });
-
-      if (isReady) {
-        toast.success(`${player === 'human' ? 'Your' : 'AI\'s'} ${skill.name} is ready!`);
-      }
-    });
+  checkSkillReadiness: (player: PlayerType) => {
+    PlayerActions.checkSkillReadiness(get(), player);
   },
 
-  toggleSkill: (player: Player, skillId: string) => {
-    debugLog('PLAYER_SLICE', 'toggleSkill called:', { player, skillId });
-    
-    const playerState = get()[player];
-    const skill = ALL_SKILLS[skillId];
-    
-    if (!skill) {
-      debugLog('PLAYER_SLICE', 'Skill not found:', skillId);
-      return;
-    }
-
-    debugLog('PLAYER_SLICE', 'Skill found:', skill);
-    debugLog('PLAYER_SLICE', 'Player resources:', playerState.matchedColors);
-    debugLog('PLAYER_SLICE', 'Skill cost:', skill.cost);
-
-    // Check if player has enough resources
-    let canUseSkill = true;
-    Object.entries(skill.cost).forEach(([color, cost]) => {
-      if (playerState.matchedColors[color as Color] < (cost || 0)) {
-        debugLog('PLAYER_SLICE', `Not enough ${color} resources: have ${playerState.matchedColors[color as Color]}, need ${cost}`);
-        canUseSkill = false;
-      }
-    });
-
-    if (!canUseSkill) {
-      toast.error('Not enough resources for this skill!');
-      return;
-    }
-
-
-
-    // Otherwise, set it as the active skill for targeting
-    const newActiveSkillId = playerState.activeSkillId === skillId ? null : skillId;
-    debugLog('PLAYER_SLICE', 'Setting active skill for targeting:', newActiveSkillId);
-
-    set(state => ({
-      [player]: {
-        ...state[player],
-        activeSkillId: newActiveSkillId
-      }
-    }));
-    // If the skill doesn't require a target, execute it immediately
-    if (!skill.requiresTarget) {
-      debugLog('PLAYER_SLICE', 'Skill does not require target, executing immediately');
-
-      // Execute the skill at position 0,0 (the position doesn't matter for non-targeted skills)
-      get().useSkill(0, 0).then();
-      return;
-    }
+  toggleSkill: (player: PlayerType, skillId: string) => {
+    PlayerActions.toggleSkill(get(), player, skillId);
   },
 
   useSkill: async (row: number, col: number) => {
-    const state = get();
-    const { currentPlayer, board } = state;
-    const playerState = state[currentPlayer];
-    const activeSkillId = playerState.activeSkillId;
-
-    debugLog('PLAYER_SLICE', 'useSkill starting:', {
-      row,
-      col,
-      activeSkillId,
-      currentPlayer,
-      tileState: board[row][col],
-      playerState
-    });
-    
-    if (!activeSkillId) {
-      debugLog('PLAYER_SLICE', 'No active skill found');
-      return;
-    }
-
-    const activeSkill = ALL_SKILLS[activeSkillId];
-    if (!activeSkill) {
-      debugLog('PLAYER_SLICE', 'Invalid skill ID:', activeSkillId);
-      return;
-    }
-
-    debugLog('PLAYER_SLICE', 'Skill validation:', {
-      skillId: activeSkillId,
-      skill: activeSkill,
-      targetColor: activeSkill.targetColor,
-      tileColor: board[row][col].color,
-      isValidTarget: !activeSkill.targetColor || board[row][col].color === activeSkill.targetColor
-    });
-
-    // Check target color if skill requires specific target
-    if (activeSkill.targetColor && board[row][col].color !== activeSkill.targetColor) {
-      debugLog('PLAYER_SLICE', 'Target color mismatch:', { 
-        required: activeSkill.targetColor, 
-        actual: board[row][col].color 
-      });
-      toast.error(`This skill can only target ${activeSkill.targetColor} tiles!`);
-      return;
-    }
-
-    // Consume resources
-    const newMatchedColors = { ...playerState.matchedColors };
-    Object.entries(activeSkill.cost).forEach(([color, cost]) => {
-      newMatchedColors[color as Color] -= (cost || 0);
-    });
-
-    debugLog('PLAYER_SLICE', 'Applying skill effect:', {
-      skillId: activeSkill.id,
-      targetTile: [row, col],
-      boardState: board[row][col]
-    });
-    
-    // Clear selected tile before applying effect to prevent animation interference
-    set({ selectedTile: null });
-    
-    // Apply skill effect
-    try {
-      await activeSkill.effect(state, row, col);
-      debugLog('PLAYER_SLICE', 'Skill effect completed, getting updated board');
-      // Make sure all animations are complete before getting the board state
-      await get().waitForAllAnimations();
-
-      // Get the current board state after the skill effect
-      const updatedBoard = get().board;
-      debugLog('PLAYER_SLICE', 'Processing updated board:', {
-        centerTileState: updatedBoard[row][col],
-        hasMatchedTiles: updatedBoard.some(row => row.some(tile => tile.isMatched))
-      });
-      
-      // Ensure board is fully processed - this fills empty tiles and drops tiles
-      await get().processNewBoard(updatedBoard);
-      
-      // Wait for all animations to complete again after processing the board
-      await get().waitForAllAnimations();
-    } catch (error) {
-      debugLog('PLAYER_SLICE', 'Error applying skill effect:', error);
-    }
-
-    // Update player state
-    set(state => ({
-      [currentPlayer]: {
-        ...state[currentPlayer],
-        matchedColors: newMatchedColors,
-        activeSkillId: null
-      }
-    }));
-
-    debugLog('PLAYER_SLICE', 'Player state updated, switching player');
-    
-    // Switch turns after skill use
-    get().switchPlayer();
+    await PlayerActions.useSkill(get(), row, col);
   },
 
   switchPlayer: () => {
-    const currentPlayer = get().currentPlayer;
-    const nextPlayer = currentPlayer === 'human' ? 'ai' : 'human';
-    
-    // Process end-of-turn item effects for current player
-    const currentPlayerState = get()[currentPlayer];
-    Object.values(currentPlayerState.equippedItems).forEach(item => {
-      if (item) {
-        item.effects.forEach(effect => {
-          if (effect.onTurnEnd) {
-            effect.onTurnEnd(get());
-          }
-        });
-      }
-    });
-    
-    // Update status effects
-    const updateStatusEffects = (player: Player) => {
-      const playerState = get()[player];
-      // Apply mana conversion effects
-      playerState.statusEffects.forEach(effect => {
-        if (effect.manaConversion) {
-          const { from, to, ratio } = effect.manaConversion;
-          const fromAmount = playerState.matchedColors[from];
-          
-          if (fromAmount >= ratio) {
-            const convertAmount = Math.floor(fromAmount / ratio);
-            const remainingAmount = fromAmount % ratio;
-            
-            debugLog('PLAYER_SLICE', `Converting ${convertAmount * ratio} ${from} mana to ${convertAmount} ${to} mana`);
-            
-            set(state => ({
-              [player]: {
-                ...state[player],
-                matchedColors: {
-                  ...state[player].matchedColors,
-                  [from]: remainingAmount,
-                  [to]: state[player].matchedColors[to] + convertAmount
-                }
-              }
-            }));
-            
-            toast.success(`Converted ${convertAmount * ratio} ${from} mana to ${convertAmount} ${to} mana!`);
-          }
-        }
-      });
-      
-      // Update status effect durations
-      const newStatusEffects = playerState.statusEffects
-        .map(effect => ({
-          ...effect,
-          turnsRemaining: effect.turnsRemaining - 1
-        }))
-        .filter(effect => effect.turnsRemaining > 0);
-
-      set(state => ({
-        [player]: {
-          ...state[player],
-          statusEffects: newStatusEffects
-        }
-      }));
-    };
-
-    // Update status effects for both players
-    updateStatusEffects('human');
-    updateStatusEffects('ai');
-    
-    // Check if current player has an extra turn
-    const hasExtraTurn = get().extraTurnGranted;
-    
-    // Reset combo counter when switching players
-    get().resetCombo();
-    
-    if (!hasExtraTurn) {
-      set(_ => ({
-        currentPlayer: nextPlayer,
-        selectedTile: null  // Only clear selection when switching players
-      }));
-
-      // Process start-of-turn item effects for the next player
-      const nextPlayerState = get()[nextPlayer];
-      Object.values(nextPlayerState.equippedItems).forEach(item => {
-        if (item) {
-          item.effects.forEach(effect => {
-            if (effect.onTurnStart) {
-              effect.onTurnStart(get());
-            }
-          });
-        }
-      });
-
-      if (nextPlayer === 'ai') {
-        get().makeAiMove();
-      }
-    } else {
-      // Reset extraTurnGranted for next turn
-      get().setExtraTurn(false);
-      toast.success(`${currentPlayer === 'human' ? 'You get' : 'AI gets'} an extra turn!`);
-    }
+    GameFlow.switchPlayer(get());
   },
 
   makeAiMove: async () => {
-    // Wait for any ongoing animations to complete
-    await get().waitForAllAnimations();
+    await AI.makeMove(get());
+  },
 
-    const { board, ai, aiDifficulty } = get();
-    const BOARD_SIZE = board.length;
-    const characterClass = CLASSES[ai.className];
+  setAiDifficulty: (level: number) => {
+    AI.setDifficulty(get(), level);
+  },
 
-    // Ensure it's still AI's turn after animations
-    if (get().currentPlayer !== 'ai') {
-      return;
-    }
-
-    // First, check if AI can use any skills
-    const availableSkills = ai.equippedSkills
-      .map(skillId => ALL_SKILLS[skillId])
-      .filter(skill => {
-        if (!skill) return false;
-        
-        let canUse = true;
-        Object.entries(skill.cost).forEach(([color, cost]) => {
-          if (ai.matchedColors[color as Color] < (cost || 0)) {
-            canUse = false;
-          }
-        });
-        return canUse;
-      });
-
-    if (availableSkills.length > 0) {
-      // For now, just use the first available skill
-      const skill = availableSkills[0];
-      if (skill && skill.id) {
-        get().toggleSkill('ai', skill.id);
-        
-        // For skills with requiresTarget: false, toggleSkill will execute them immediately
-        // Only handle targeted skills here
-        if (skill.requiresTarget !== false) {
-          // Find appropriate target for the skill
-          if (skill.targetColor) {
-            for (let row = 0; row < BOARD_SIZE; row++) {
-              for (let col = 0; col < BOARD_SIZE; col++) {
-                if (board[row][col].color === skill.targetColor) {
-                  await get().useSkill(row, col);
-                  return;
-                }
-              }
-            }
-          } else {
-            // If no specific target color needed, just use at center of board
-            const centerRow = Math.floor(BOARD_SIZE / 2);
-            const centerCol = Math.floor(BOARD_SIZE / 2);
-            await get().useSkill(centerRow, centerCol);
-            return;
-          }
-        }
-        // If we got here with a non-targeted skill, it was already executed by toggleSkill
-        return;
-      }
-    }
-
-    // Helper function to evaluate a potential move
-    const evaluateMove = (row1: number, col1: number, row2: number, col2: number): number => {
-      // Don't allow moving frozen tiles
-      if (board[row1][col1].isFrozen) {
-        return -1;
-      }
-
-      // Create a temporary board with the move applied
-      const tempBoard = board.map(row => [...row]);
-      const temp = { ...tempBoard[row1][col1] };
-      tempBoard[row1][col1] = { ...tempBoard[row2][col2] };
-      tempBoard[row2][col2] = { ...temp };
-
-      // Use our existing findMatches function to find all matches
-      const matches = get().findMatches(tempBoard);
-      if (matches.length === 0) return -1;
-
-      let score = 0;
-      matches.forEach(match => {
-        // Base score for any match
-        score += 1000;
-        
-        // Bonus for match length
-        if (match.tiles.length > 3) {
-          score += (match.tiles.length - 3) * 2000;
-        }
-
-        // Color-based scoring
-        const color = match.color;
-        if (color === characterClass.primaryColor) {
-          score += 5000;
-        } else if (color === characterClass.secondaryColor) {
-          score += 3000;
-        }
-      });
-
-      return score;
-    };
-
-    // Store the top 5 moves
-    type MoveOption = {
-      row1: number;
-      col1: number;
-      row2: number;
-      col2: number;
-      score: number;
-    };
-    const topMoves: MoveOption[] = [];
-
-    // Check horizontal swaps
-    for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE - 1; col++) {
-        const score = evaluateMove(row, col, row, col + 1);
-        if (score > 0) {
-          addToTopMoves({ row1: row, col1: col, row2: row, col2: col + 1, score });
-        }
-      }
-    }
-
-    // Check vertical swaps
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      for (let row = 0; row < BOARD_SIZE - 1; row++) {
-        const score = evaluateMove(row, col, row + 1, col);
-        if (score > 0) {
-          addToTopMoves({ row1: row, col1: col, row2: row + 1, col2: col, score });
-        }
-      }
-    }
-
-    // Helper function to add a move to the top moves list
-    function addToTopMoves(move: MoveOption) {
-      topMoves.push(move);
-      // Sort by score descending and keep only the top 5
-      topMoves.sort((a, b) => b.score - a.score);
-      if (topMoves.length > 5) {
-        topMoves.pop();
-      }
-    }
-
-    if (topMoves.length > 0) {
-      // Select a move based on difficulty
-      let selectedMove: MoveOption;
-      
-      if (topMoves.length === 1) {
-        // If there's only one move, just use it
-        selectedMove = topMoves[0];
-      } else {
-        // Choose a move based on difficulty
-        // Difficulty 5: Always pick the best move (index 0)
-        // Difficulty 1-4: Potentially pick suboptimal moves
-        
-        // Calculate the index range based on difficulty
-        // Lower difficulty means higher chance of picking suboptimal moves
-        const maxIndex = Math.min(5 - aiDifficulty, topMoves.length - 1);
-        
-        // Randomly select an index within our range
-        // This ensures that even at lowest difficulty, the worst move is still from top 5
-        const selectedIndex = Math.floor(Math.random() * (maxIndex + 1));
-        selectedMove = topMoves[selectedIndex];
-        
-        debugLog('PLAYER_SLICE', 'AI move selection', {
-          difficulty: aiDifficulty,
-          possibleMovesCount: topMoves.length,
-          maxIndex,
-          selectedIndex,
-          bestMoveScore: topMoves[0].score,
-          selectedMoveScore: selectedMove.score
-        });
-      }
-
-      // Visual feedback for AI's move
-      get().selectTile(selectedMove.row1, selectedMove.col1);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      get().selectTile(selectedMove.row2, selectedMove.col2);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Clear selection before swap
-      set({ selectedTile: null });
-      
-      // Execute the move
-      await get().swapTiles(selectedMove.row1, selectedMove.col1, selectedMove.row2, selectedMove.col2);
-      //switch player after move. If we have an extra turn, it will be handled in switchPlayer
-      get().switchPlayer();
-      return;
-    }
-
-    toast.error("AI couldn't find a move!");
-    get().switchPlayer();
+  takeDamage: (attacker: 'human' | 'ai', defender: 'human' | 'ai', damageAmount: number, isDirectDamage: boolean, isSkillDamage = false) => {
+    return PlayerActions.takeDamage(get(), attacker, defender, damageAmount, isDirectDamage, isSkillDamage);
   },
 
   // Item management functions - disabled for now
-  equipItem: (player: Player, itemId: string) => {
+  equipItem: (player: 'human' | 'ai', itemId: string) => {
     console.log('Item functionality is disabled');
   },
   
-  unequipItem: (player: Player, slot: 'weapon' | 'armor' | 'accessory' | 'trinket') => {
+  unequipItem: (player: 'human' | 'ai', slot: 'weapon' | 'armor' | 'accessory' | 'trinket') => {
     console.log('Item functionality is disabled');
   },
   
-  addItemToInventory: (player: Player, itemId: string) => {
+  addItemToInventory: (player: 'human' | 'ai', itemId: string) => {
     console.log('Item functionality is disabled');
   },
   
-  removeItemFromInventory: (player: Player, itemId: string) => {
+  removeItemFromInventory: (player: 'human' | 'ai', itemId: string) => {
     console.log('Item functionality is disabled');
   },
   
-  calculatePlayerStats: (player: Player) => {
+  calculatePlayerStats: (player: 'human' | 'ai') => {
     const state = get();
     const playerState = state[player];
     
@@ -649,128 +174,5 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
         colorStats
       }
     }));
-  },
-
-  // Updated damage function with skill damage parameter
-  takeDamage: (attacker: Player, defender: Player, damageAmount: number, isDirectDamage: boolean, isSkillDamage = false) => {
-    const state = get();
-    let totalDamage = damageAmount;
-    
-    debugLog('PLAYER_SLICE', 'takeDamage called', {
-      attacker,
-      defender,
-      initialDamage: damageAmount,
-      isDirectDamage,
-      isSkillDamage
-    });
-    
-    // 1. Apply attacker's damage multiplier from status effects if it's direct damage
-    if (isDirectDamage) {
-      const attackerDamageMultiplier = state[attacker].statusEffects.reduce(
-        (multiplier, effect) => multiplier * (effect.damageMultiplier || 1), 1
-      );
-      
-      if (attackerDamageMultiplier !== 1) {
-        totalDamage = Math.round(totalDamage * attackerDamageMultiplier);
-        debugLog('PLAYER_SLICE', `Applied attacker damage multiplier: ${attackerDamageMultiplier}`, {
-          originalDamage: damageAmount,
-          multipliedDamage: totalDamage
-        });
-      }
-      
-      // 1.5. Apply skill-specific damage multiplier if applicable
-      if (isSkillDamage) {
-        // Skill damage multiplier comes from status effects with a skillDamageMultiplier property
-        const skillDamageMultiplier = state[attacker].statusEffects.reduce(
-          (multiplier, effect) => multiplier * (effect.skillDamageMultiplier || 1), 1
-        );
-        
-        if (skillDamageMultiplier !== 1) {
-          const damageBeforeSkillMultiplier = totalDamage;
-          totalDamage = Math.round(totalDamage * skillDamageMultiplier);
-          debugLog('PLAYER_SLICE', `Applied skill damage multiplier: ${skillDamageMultiplier}`, {
-            damageBeforeSkillMultiplier,
-            afterSkillMultiplier: totalDamage
-          });
-        }
-      }
-      
-      // 2. Emit OnDamageDealt event for direct damage
-      if (state.emit) {
-        state.emit('OnDamageDealt', {
-          amount: totalDamage,
-          source: attacker,
-          target: defender,
-          damageType: isSkillDamage ? 'skill' : 'normal'
-        });
-      }
-    }
-    
-    // 3. Apply defender's damage multiplier from status effects (always applies)
-    const defenderDamageMultiplier = state[defender].statusEffects.reduce(
-      (multiplier, effect) => multiplier * (effect.damageMultiplier || 1), 1
-    );
-    
-    if (defenderDamageMultiplier !== 1) {
-      totalDamage = Math.round(totalDamage * defenderDamageMultiplier);
-      debugLog('PLAYER_SLICE', `Applied defender damage multiplier: ${defenderDamageMultiplier}`, {
-        previousDamage: totalDamage / defenderDamageMultiplier,
-        multipliedDamage: totalDamage
-      });
-    }
-    
-    // 3.5. Apply defender's skill damage reduction if applicable
-    if (isSkillDamage) {
-      // Skill damage reduction comes from status effects with a skillDamageReduction property
-      const skillDamageReduction = state[defender].statusEffects.reduce(
-        (reduction, effect) => reduction + (effect.skillDamageReduction || 0), 0
-      );
-      
-      if (skillDamageReduction > 0) {
-        const damageBeforeReduction = totalDamage;
-        totalDamage = Math.max(0, totalDamage - skillDamageReduction);
-        debugLog('PLAYER_SLICE', `Applied skill damage reduction: ${skillDamageReduction}`, {
-          damageBeforeReduction,
-          afterReduction: totalDamage
-        });
-      }
-    }
-    
-    // 4. Apply defense reduction (always applies)
-    const defenderDefense = state[defender].defense;
-    if (defenderDefense > 0) {
-      const reducedDamage = Math.max(0, totalDamage - defenderDefense);
-      debugLog('PLAYER_SLICE', `Defender defense reduced damage by ${defenderDefense}`, {
-        originalDamage: totalDamage,
-        reducedDamage: reducedDamage
-      });
-      totalDamage = reducedDamage;
-    }
-    
-    // 5. Emit OnDamageTaken event if it's direct damage
-    if (isDirectDamage && state.emit) {
-      state.emit('OnDamageTaken', {
-        amount: totalDamage,
-        source: attacker,
-        target: defender,
-        damageType: isSkillDamage ? 'skill' : 'normal'
-      });
-    }
-    
-    // 6. Apply the final damage
-    if (totalDamage > 0) {
-      set(state => ({
-        [defender]: {
-          ...state[defender],
-          health: Math.max(0, state[defender].health - totalDamage)
-        }
-      }));
-    }
-    
-    return totalDamage;
-  },
-
-  setAiDifficulty: (level: number) => {
-    set({ aiDifficulty: level });
   }
 }); 

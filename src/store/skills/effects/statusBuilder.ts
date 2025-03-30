@@ -1,4 +1,4 @@
-import { StatusEffect, Color, GameState, Player } from '../../types';
+import { StatusEffect, Color, GameState, PlayerType } from '../../types';
 import { debugLog } from '../../slices/debug';
 import { EffectDefinition } from './effects';
 
@@ -177,6 +177,16 @@ export class StatusEffectBuilder {
   }
 
   /**
+   * Add an onTurnStart callback to the status effect
+   * @param callback The callback to execute at the start of each turn
+   * @returns The builder instance for chaining
+   */
+  addOnTurnStart(callback: (state: GameState, player: PlayerType) => void): StatusEffectBuilder {
+    this.effect.onTurnStart = callback;
+    return this;
+  }
+
+  /**
    * Build and return the final StatusEffect object
    * @returns The complete StatusEffect
    */
@@ -210,7 +220,7 @@ export class StatusEffectBuilder {
     return {
       type: 'status',
       description: description + targetSuffix,
-      execute: async (state: GameState, player?: Player) => {
+      execute: async (state: GameState, player?: PlayerType) => {
         const currentPlayer = player || state.currentPlayer;
         const opponent = currentPlayer === 'human' ? 'ai' : 'human';
         const effect = this.build();

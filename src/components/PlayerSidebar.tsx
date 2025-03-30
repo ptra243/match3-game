@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {useGameStore} from '../store/gameStore';
-import {Color, Player} from '../store/types';
+import {Color, Player, PlayerType} from '../store/types';
 import {CLASSES} from '../store/classes';
 import {TileIcon} from './game-board/TileIcon';
 import {ALL_SKILLS} from '../store/skills';
@@ -8,7 +8,7 @@ import {toast} from 'react-hot-toast';
 import {MATCH_RULES} from '../store/gameRules';
 
 interface PlayerSidebarProps {
-  player: Player;
+  player: PlayerType;
   position: 'left' | 'right';
 }
 
