@@ -210,9 +210,6 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       for (const drop of drops) {
         get().startAnimation(drop.animId);
       }
-
-      // Wait for all animations to complete
-      await get().waitForAllAnimations();
     }
 
     return get().board;
@@ -267,9 +264,6 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
       for (const animId of animationIds) {
         get().startAnimation(animId);
       }
-
-      // Wait for the fill animation to complete
-      await get().waitForAllAnimations();
     }
 
     return get().board;
@@ -742,13 +736,8 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     debugLog('BOARD_SLICE', 'Processing board after swap');
     await get().processNewBoard(get().board);
 
-    // Only switch players if no extra turn was granted
-    if (!get().extraTurnGranted) {
-      get().switchPlayer();
-    } else {
-      // Reset extraTurnGranted for next turn
-      get().setExtraTurn(false);
-    }
+    // Let switchPlayer handle extra turns
+    get().switchPlayer();
     return true;
   },
 }); 

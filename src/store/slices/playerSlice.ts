@@ -333,9 +333,6 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
       const playerState = get()[player];
       // Apply mana conversion effects
       playerState.statusEffects.forEach(effect => {
-        if(effect.extraTurn){
-          get().setExtraTurn(true);
-        }
         if (effect.manaConversion) {
           const { from, to, ratio } = effect.manaConversion;
           const fromAmount = playerState.matchedColors[from];
@@ -376,28 +373,19 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
           statusEffects: newStatusEffects
         }
       }));
-
-      // Check for extra turn effect
-      return newStatusEffects.some(effect => effect.extraTurn);
     };
 
-    const humanHasExtraTurn = updateStatusEffects('human');
-    const aiHasExtraTurn = updateStatusEffects('ai');
+    // Update status effects for both players
+    updateStatusEffects('human');
+    updateStatusEffects('ai');
     
-    // Only switch players if the current player doesn't have an extra turn
-    const currentCombo = get().currentCombo;
-    const hasComboExtraTurn = currentCombo >= 10;
-    if (hasComboExtraTurn) {
-      get().setExtraTurn(true);
-      toast.success(`${currentCombo} combo! Extra turn granted!`);
-    }
-    const shouldSwitchPlayer = currentPlayer === 'human'
-      ? (!humanHasExtraTurn && !hasComboExtraTurn)
-      : (!aiHasExtraTurn && !hasComboExtraTurn);
-      
+    // Check if current player has an extra turn
+    const hasExtraTurn = get().extraTurnGranted;
+    
     // Reset combo counter when switching players
     get().resetCombo();
-    if (shouldSwitchPlayer) {
+    
+    if (!hasExtraTurn) {
       set(_ => ({
         currentPlayer: nextPlayer,
         selectedTile: null  // Only clear selection when switching players
@@ -419,6 +407,8 @@ export const createPlayerSlice: StateCreator<GameState, [], [], PlayerSlice> = (
         get().makeAiMove();
       }
     } else {
+      // Reset extraTurnGranted for next turn
+      get().setExtraTurn(false);
       toast.success(`${currentPlayer === 'human' ? 'You get' : 'AI gets'} an extra turn!`);
     }
   },
