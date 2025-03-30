@@ -76,33 +76,26 @@ const BlessingCard: React.FC<{
   
   return (
     <div 
-      className={`p-2 rounded-lg border ${hasEnoughResources ? 'border-white' : 'border-gray-600'} bg-gray-700 relative`}
+      className={`p-1.5 rounded-lg border ${hasEnoughResources ? 'border-white' : 'border-gray-600'} bg-gray-700 relative`}
       onMouseEnter={() => setShowDetails(true)}
       onMouseLeave={() => setShowDetails(false)}
       onTouchStart={() => setShowDetails(true)}
       onTouchEnd={() => setShowDetails(false)}
     >
       <div className="flex items-center justify-between">
-        <h4 className="text-white font-medium text-xs truncate mr-1">{blessing.name}</h4>
-        <div className="flex items-center flex-shrink-0">
-          <div className={`w-3 h-3 rounded-full ${COLOR_BACKGROUNDS[blessing.color]} mr-1`}></div>
-          <span className={`text-xs ${hasEnoughResources ? 'text-white' : 'text-red-400'}`}>
-            {blessing.cost}
-          </span>
+        <div className="flex items-center flex-1 min-w-0">
+          <div className={`w-2.5 h-2.5 rounded-full ${COLOR_BACKGROUNDS[blessing.color]} mr-1.5 flex-shrink-0`}></div>
+          <h4 className="text-white font-medium text-xs truncate">{blessing.name}</h4>
         </div>
-      </div>
-      
-      {/* Compact summary that's always visible */}
-      <div className="text-xs text-gray-300 truncate mt-1">
-        {blessing.description.length > 30 
-          ? blessing.description.substring(0, 30) + '...' 
-          : blessing.description}
+        <span className={`text-xs ml-2 flex-shrink-0 ${hasEnoughResources ? 'text-white' : 'text-red-400'}`}>
+          {blessing.cost}
+        </span>
       </div>
       
       <button
         onClick={onPurchase}
         disabled={!hasEnoughResources}
-        className={`w-full mt-1 py-1 px-2 rounded text-xs font-medium ${
+        className={`w-full mt-1 py-0.5 px-1.5 rounded text-[10px] font-medium ${
           hasEnoughResources 
             ? 'bg-blue-600 hover:bg-blue-700 text-white' 
             : 'bg-gray-600 text-gray-400 cursor-not-allowed'
@@ -168,17 +161,17 @@ const BlessingPanel: React.FC = () => {
   if (currentPlayer !== 'human') return null;
   
   return (
-    <div className="w-full bg-gray-800 border-t border-gray-700 p-2 mt-2">
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-white font-bold text-sm">Blessings</h3>
-        <div className="flex items-center text-xs text-gray-300">
+    <div className="w-full bg-gray-800 border-t border-gray-700 p-1.5">
+      <div className="flex justify-between items-center mb-1.5">
+        <h3 className="text-white font-bold text-xs">Blessings</h3>
+        <div className="flex items-center text-[10px] text-gray-300">
           <span>Battle {battleState.currentBattle}/{battleState.maxBattles}</span>
-          <span className="mx-2">|</span>
+          <span className="mx-1">|</span>
           <span>Collected: {battleState.blessingsCollected.length}</span>
           {battleState.blessingsCollected.length >= 3 && (
             <button
               onClick={() => useGameStore.getState().convertBlessingsToItem()}
-              className="ml-2 px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs"
+              className="ml-1 px-1.5 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-[10px]"
             >
               Convert
             </button>
@@ -186,12 +179,12 @@ const BlessingPanel: React.FC = () => {
         </div>
       </div>
       
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-1">
         {availableBlessings.map((blessing) => {
           const hasEnoughResources = playerResources[blessing.color] >= blessing.cost;
           
           return (
-            <div key={blessing.id} className="w-[calc(20%-0.4rem)]">
+            <div key={blessing.id} className="flex-1">
               <BlessingCard
                 blessing={blessing}
                 hasEnoughResources={hasEnoughResources}

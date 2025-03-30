@@ -25,10 +25,25 @@ export const GameBoardGrid: React.FC<GameBoardGridProps> = ({ activeTile }) => {
 
   return (
     <div
-      className="w-full h-full max-w-[32rem] max-h-[32rem] md:w-[32rem] md:h-[32rem] grid gap-0.5 md:gap-1 relative"
+      className="
+        w-full aspect-square
+        min-w-[240px] min-h-[240px]
+        max-w-[240px] max-h-[240px]
+        sm:max-w-[280px] sm:max-h-[280px]
+        md:max-w-[32rem] md:max-h-[32rem]
+        md:w-[32rem] md:h-[32rem]
+        grid 
+        gap-0.5 sm:gap-1 md:gap-1.5
+        p-0.5 sm:p-2 md:p-4
+        bg-slate-800
+        rounded-lg md:rounded-xl
+        relative
+        mx-auto
+        overflow-hidden
+      "
       style={{
-        gridTemplateColumns: `repeat(${board.length}, minmax(0, 1fr))`,
-        gridTemplateRows: `repeat(${board.length}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${board.length}, 1fr)`,
+        gridTemplateRows: `repeat(${board.length}, 1fr)`,
       }}
     >
       {board.map((row, rowIndex) =>

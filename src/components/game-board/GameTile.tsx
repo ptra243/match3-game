@@ -163,7 +163,7 @@ export const GameTile: React.FC<GameTileProps> = ({
     onClick={handleClick}
     {...attributes}
     {...listeners}
-    className={`relative w-full h-full rounded-lg ${shouldBeEmpty() ? 'bg-transparent' : colorClasses[getDisplayColor()]} 
+    className={`relative aspect-square rounded-lg ${shouldBeEmpty() ? 'bg-transparent' : colorClasses[getDisplayColor()]} 
       flex items-center justify-center 
       ${!isHumanTurn || (tile.isFrozen && !isSkillActive) ? 'cursor-not-allowed' : (!isSkillActive || (isSkillActive && canTargetWithSkill) ? 'cursor-move' : 'cursor-not-allowed')} 
       shadow-md 

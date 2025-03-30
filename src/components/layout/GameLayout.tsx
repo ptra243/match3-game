@@ -24,10 +24,12 @@ export const GameLayout: React.FC<GameLayoutProps> = ({onReset}) => {
 
     // Mobile layout with fixed position icons and stacked layout
     const MobileLayout = () => (
-        <div className="flex flex-col items-center">
-            <MobilePlayerIcon player="human" position="left"/>
-            <MobilePlayerIcon player="ai" position="right"/>
-            <div className="pt-6 w-full max-w-[98vw]"> {/* Significantly reduced top padding */}
+        <div className="flex flex-col items-center min-h-screen">
+            <div className="fixed top-0 left-0 right-0 flex justify-between p-2 z-10">
+                <MobilePlayerIcon player="human" position="left"/>
+                <MobilePlayerIcon player="ai" position="right"/>
+            </div>
+            <div className="w-full max-w-[98vw] mt-16 flex flex-col gap-2">
                 <GameBoard/>
                 <MobileBlessingPanel/>
             </div>
@@ -38,7 +40,7 @@ export const GameLayout: React.FC<GameLayoutProps> = ({onReset}) => {
     const DesktopLayout = () => (
         <div className="flex justify-center items-start">
             <PlayerSidebar player="human" position="left"/>
-            <div className="flex flex-col mx-4">
+            <div className="flex flex-col mx-4 gap-2">
                 <GameBoard/>
                 <BlessingPanel/>
             </div>
