@@ -13,7 +13,13 @@ interface MobilePlayerIconProps {
 
 export const MobilePlayerIcon: React.FC<MobilePlayerIconProps> = ({player, position}) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const {human, ai, currentPlayer, toggleSkill} = useGameStore();
+    
+    // Use auto-generated selectors
+    const human = useGameStore.use.human();
+    const ai = useGameStore.use.ai();
+    const currentPlayer = useGameStore.use.currentPlayer();
+    const toggleSkill = useGameStore.use.toggleSkill();
+
     const playerState = player === 'human' ? human : ai;
     const isCurrentPlayer = currentPlayer === player;
     const characterClass = CLASSES[playerState.className];

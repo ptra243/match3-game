@@ -1,8 +1,9 @@
 import { StateCreator } from 'zustand';
 import { GameState, Color } from '../types';
+import { GAME_CONSTANTS } from '../gameRules';
+import { createInitialPlayerState } from '../slices/playerSlice';
+import { getRandomBlessingsForColors } from '../blessings';
 import { debugLog } from './debug';
-
-const BOARD_SIZE = 8;
 
 export interface GameSlice {
   resetGame: () => void;
@@ -20,9 +21,23 @@ export interface GameSlice {
 export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set, get) => {
   return {
     resetGame: () => {
-      set({
-        board: Array(BOARD_SIZE).fill(null).map(() => 
-          Array(BOARD_SIZE).fill(null).map(() => ({
+      console.log('GameSlice - Resetting game');
+      set((state) => {
+        const newState = { ...state };
+        
+        // Reset basic state properties
+        newState.human = createInitialPlayerState(true);
+        newState.ai = createInitialPlayerState(false);
+        newState.currentPlayer = 'human';
+        newState.isGameOver = false;
+        newState.selectedTile = null;
+        newState.currentMatchSequence = 0;
+        newState.currentCombo = 0;
+        newState.extraTurnGranted = false;
+        
+        // Reset board
+        newState.board = Array(GAME_CONSTANTS.BOARD_SIZE).fill(null).map(() => 
+          Array(GAME_CONSTANTS.BOARD_SIZE).fill(null).map(() => ({
             color: 'empty' as Color,
             isMatched: false,
             isNew: false,
@@ -30,76 +45,31 @@ export const createGameSlice: StateCreator<GameState, [], [], GameSlice> = (set,
             isFrozen: false,
             isIgnited: false
           }))
-        ),
-        currentPlayer: 'human',
-        selectedTile: null,
-        isGameOver: false,
-        currentMatchSequence: 0,
-        currentCombo: 0,
-        human: {
-          health: 100,
-          className: '',
-          equippedSkills: [],
-          activeSkillId: null,
-          skillCastCount: {},
-          matchedColors: {
-            red: 0,
-            blue: 0,
-            green: 0,
-            yellow: 0,
-            black: 0,
-            empty: 0
-          },
-          statusEffects: [],
-          defense: 0,
-          colorStats: {
-            red: 0,
-            blue: 0,
-            green: 0,
-            yellow: 0,
-            black: 0,
-            empty: 0
-          },
-          equippedItems: {
-            weapon: null,
-            armor: null,
-            accessory: null,
-            trinket: null
-          },
-          inventory: []
-        },
-        ai: {
-          health: 100,
-          className: '',
-          equippedSkills: [],
-          activeSkillId: null,
-          skillCastCount: {},
-          matchedColors: {
-            red: 0,
-            blue: 0,
-            green: 0,
-            yellow: 0,
-            black: 0,
-            empty: 0
-          },
-          statusEffects: [],
-          defense: 0,
-          colorStats: {
-            red: 0,
-            blue: 0,
-            green: 0,
-            yellow: 0,
-            black: 0,
-            empty: 0
-          },
-          equippedItems: {
-            weapon: null,
-            armor: null,
-            accessory: null,
-            trinket: null
-          },
-          inventory: []
-        }
+        );
+        
+        // Reset Maps using new Map instances
+        newState.animationState = {
+          activeAnimations: new Map(),
+          sequences: new Map()
+        };
+        newState.eventState = {
+          events: new Map(),
+          middleware: []
+        };
+        
+        // Reset battle state
+        newState.battleState = {
+          currentBattle: 1,
+          maxBattles: 5,
+          blessingsCollected: [],
+          playerWins: 0,
+          aiWins: 0
+        };
+        
+        // Reset available blessings
+        newState.availableBlessings = getRandomBlessingsForColors();
+        
+        return newState;
       });
     },
     isGameOver: false,

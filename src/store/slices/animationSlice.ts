@@ -3,8 +3,10 @@ import { GameState, AnimationType, AnimationInfo, AnimationSequence } from '../t
 import { debugLog } from './debug';
 
 export interface AnimationSlice {
-  activeAnimations: Map<string, AnimationInfo>;
-  sequences: Map<string, AnimationSequence>;
+  animationState: {
+    activeAnimations: Map<string, AnimationInfo>;
+    sequences: Map<string, AnimationSequence>;
+  };
   
   // Animation Registration
   registerAnimation: (type: AnimationType, elementIds: string[], metadata?: Record<string, any>) => string;
@@ -53,7 +55,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       // Register the animation
       set((state) => {
         // Use Immer's draft state to modify the Map
-        state.activeAnimations.set(id, animationInfo);
+        state.animationState.activeAnimations.set(id, animationInfo);
         return state;
       });
       
@@ -63,7 +65,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
     waitForAnimation: (id: string) => {
       return new Promise<void>((resolve, reject) => {
         const checkStatus = () => {
-          const animation = get().activeAnimations.get(id);
+          const animation = get().animationState.activeAnimations.get(id);
           if (!animation) {
             reject(new Error('Animation not found'));
             return;
@@ -85,7 +87,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       debugLog('ANIMATION', `Starting animation ${id}`);
       
       // Get the current state to check if animation exists
-      const animation = get().activeAnimations.get(id);
+      const animation = get().animationState.activeAnimations.get(id);
       if (!animation) {
         debugLog('ANIMATION', `No animation found for id ${id}`);
         return;
@@ -93,7 +95,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
 
       set((state) => {
         // Use Immer's draft state to modify the Map
-        state.activeAnimations.set(id, {
+        state.animationState.activeAnimations.set(id, {
           ...animation,
           status: 'running',
           startTime: Date.now()
@@ -104,12 +106,12 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
     
     failAnimation: (id: string, error: Error) => {
       debugLog('ANIMATION', `Animation ${id} failed`, error);
-      const animation = get().activeAnimations.get(id);
+      const animation = get().animationState.activeAnimations.get(id);
       if (!animation) return;
 
       set((state) => {
         // Use Immer's draft state to modify the Map
-        state.activeAnimations.set(id, {
+        state.animationState.activeAnimations.set(id, {
           ...animation,
           status: 'failed'
         });
@@ -120,36 +122,48 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
 
   return {
     // Initialize Maps in the slice
-    activeAnimations: new Map<string, AnimationInfo>(),
-    sequences: new Map<string, AnimationSequence>(),
+    animationState: {
+      activeAnimations: new Map<string, AnimationInfo>(),
+      sequences: new Map<string, AnimationSequence>()
+    },
 
     registerAnimation: sliceInternals.registerAnimation,
     startAnimation: sliceInternals.startAnimation,
 
     completeAnimation: (id) => {
       debugLog('ANIMATION', `Completing animation ${id}`);
-      const animation = get().activeAnimations.get(id);
+      const animation = get().animationState.activeAnimations.get(id);
       if (!animation) return;
 
       set((state) => {
-        // Use Immer's draft state to modify the Map
-        state.activeAnimations.set(id, {
+        // Create new Map with updated animation
+        const newActiveAnimations = new Map(state.animationState.activeAnimations);
+        newActiveAnimations.set(id, {
           ...animation,
           status: 'completed'
         });
 
+        // Create new Map for sequences
+        const newSequences = new Map(state.animationState.sequences);
+
         // Check if this animation is part of a sequence
-        state.sequences.forEach((sequence, sequenceId) => {
+        state.animationState.sequences.forEach((sequence, sequenceId) => {
           if (sequence.animations.find((a) => a.id === id)) {
             const allCompleted = sequence.animations.every(
-              (a) => state.activeAnimations.get(a.id)?.status === 'completed'
+              (a) => state.animationState.activeAnimations.get(a.id)?.status === 'completed'
             );
             if (allCompleted) {
               sequence.onComplete?.();
-              state.sequences.delete(sequenceId);
+              newSequences.delete(sequenceId);
             }
           }
         });
+
+        // Update the animation state with new Maps
+        state.animationState = {
+          activeAnimations: newActiveAnimations,
+          sequences: newSequences
+        };
         return state;
       });
     },
@@ -159,24 +173,31 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
     createSequence: ({ id, animations, onComplete, onError }) => {
       debugLog('ANIMATION', `Creating animation sequence ${id}`, { animations });
       const animationInfos = animations.map(anim => ({
-        ...get().activeAnimations.get(sliceInternals.registerAnimation(anim.type, anim.elementIds, anim.metadata))!
+        ...get().animationState.activeAnimations.get(sliceInternals.registerAnimation(anim.type, anim.elementIds, anim.metadata))!
       }));
 
       set((state) => {
-        // Use Immer's draft state to modify the Map
-        state.sequences.set(id, {
+        // Create new Map for sequences
+        const newSequences = new Map(state.animationState.sequences);
+        newSequences.set(id, {
           id,
           animations: animationInfos,
           status: 'pending',
           onComplete,
           onError
         });
+
+        // Update the animation state with new Map
+        state.animationState = {
+          ...state.animationState,
+          sequences: newSequences
+        };
         return state;
       });
     },
 
     startSequence: async (id) => {
-      const sequence = get().sequences.get(id);
+      const sequence = get().animationState.sequences.get(id);
       if (!sequence) return;
 
       debugLog('ANIMATION', `Starting animation sequence ${id}`);
@@ -192,7 +213,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
       } finally {
         set((state) => {
           // Use Immer's draft state to modify the Map
-          state.sequences.delete(id);
+          state.animationState.sequences.delete(id);
           return state;
         });
       }
@@ -200,7 +221,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
 
     cancelSequence: (id) => {
       debugLog('ANIMATION', `Cancelling animation sequence ${id}`);
-      const sequence = get().sequences.get(id);
+      const sequence = get().animationState.sequences.get(id);
       if (!sequence) return;
 
       sequence.animations.forEach((animation) => {
@@ -211,13 +232,13 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
 
       set((state) => {
         // Use Immer's draft state to modify the Map
-        state.sequences.delete(id);
+        state.animationState.sequences.delete(id);
         return state;
       });
     },
 
     isAnimating: (elementId) => {
-      return Array.from(get().activeAnimations.values()).some(
+      return Array.from(get().animationState.activeAnimations.values()).some(
         animation => 
           animation.status === 'running' && 
           animation.elementIds.includes(elementId)
@@ -225,7 +246,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
     },
 
     getCurrentAnimation: (elementId) => {
-      return Array.from(get().activeAnimations.values()).find(
+      return Array.from(get().animationState.activeAnimations.values()).find(
         animation => 
           animation.status === 'running' && 
           animation.elementIds.includes(elementId)
@@ -236,7 +257,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
 
     waitForSequence: (id) => {
       return new Promise<void>((resolve, reject) => {
-        const sequence = get().sequences.get(id);
+        const sequence = get().animationState.sequences.get(id);
         if (!sequence) {
           reject(new Error('Sequence not found'));
           return;
@@ -244,7 +265,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
 
         const checkStatus = () => {
           const allCompleted = sequence.animations.every(
-            (a) => get().activeAnimations.get(a.id)?.status === 'completed'
+            (a) => get().animationState.activeAnimations.get(a.id)?.status === 'completed'
           );
           if (allCompleted) {
             resolve();
@@ -257,7 +278,7 @@ export const createAnimationSlice: StateCreator<GameState, [], [], AnimationSlic
     },
 
     waitForAllAnimations: async () => {
-      const runningAnimations = Array.from(get().activeAnimations.entries())
+      const runningAnimations = Array.from(get().animationState.activeAnimations.entries())
         .filter(([_, anim]) => anim.status === 'running')
         .map(([id]) => id);
       

@@ -1,23 +1,40 @@
-import { create, StateCreator } from 'zustand';
+import { createWithEqualityFn } from 'zustand/traditional';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import { createBoardSlice } from './slices/boardSlice';
-import { createInitialPlayerState, createPlayerSlice } from './slices/playerSlice';
 import { createMatchSlice } from './slices/matchSlice';
-import { createGameSlice } from './slices/gameSlice';
+import { createPlayerSlice, createInitialPlayerState } from './slices/playerSlice';
 import { createAnimationSlice } from './slices/animationSlice';
 import { createEventSlice, GameEventType, EventHandler } from './slices/eventSlice';
 import { createBlessingSlice } from './slices/blessingSlice';
 import { createItemSlice } from './slices/itemSlice';
+import { createGameSlice } from './slices/gameSlice';
 import { createLoggerMiddleware } from './middleware/loggerMiddleware';
-import { Color, Player, GameState, BattleState, AnimationInfo, AnimationSequence } from './types';
+import { Player, GameState, BattleState, AnimationInfo, AnimationSequence } from './types';
 import { getRandomBlessingsForColors } from './blessings';
-import { toast } from 'react-hot-toast';
-import { debugLog } from './slices/debug';
+import { shallow } from 'zustand/shallow';
+import { StoreApi, UseBoundStore } from 'zustand';
 
 // Enable Immer's MapSet plugin
 enableMapSet();
+
+// Add the createSelectors utility
+type WithSelectors<S> = S extends { getState: () => infer T }
+  ? S & { use: { [K in keyof T]: () => T[K] } }
+  : never
+
+const createSelectors = <S extends UseBoundStore<StoreApi<object>>>(
+  _store: S,
+) => {
+  let store = _store as WithSelectors<typeof _store>
+  store.use = {}
+  for (let k of Object.keys(store.getState())) {
+    ;(store.use as any)[k] = () => store((s: any) => s[k as keyof typeof s])
+  }
+
+  return store
+}
 
 // Combine all slices
 interface GameStore extends GameState {
@@ -37,11 +54,19 @@ const initialState = {
     playerWins: 0,
     aiWins: 0
   } as BattleState,
+  animationState: {
+    activeAnimations: new Map<string, AnimationInfo>(),
+    sequences: new Map<string, AnimationSequence>()
+  },
+  eventState: {
+    events: new Map<GameEventType, Set<EventHandler>>(),
+    middleware: []
+  },
   middleware: []
 };
 
-// Create the store with proper middleware order
-export const useGameStore = create<GameStore>()(
+// Create the base store
+const useGameStoreBase = createWithEqualityFn<GameStore>()(
   devtools(
     immer(
       (set, get, store) => {
@@ -49,11 +74,11 @@ export const useGameStore = create<GameStore>()(
         const boardSlice = createBoardSlice(set, get, store);
         const playerSlice = createPlayerSlice(set, get, store);
         const matchSlice = createMatchSlice(set, get, store);
-        const gameSlice = createGameSlice(set, get, store);
         const animationSlice = createAnimationSlice(set, get, store);
         const eventSlice = createEventSlice(set, get, store);
         const blessingSlice = createBlessingSlice(set, get, store);
         const itemSlice = createItemSlice(set, get, store);
+        const gameSlice = createGameSlice(set, get, store);
 
         // Setup handlers for event-based blessing triggers
         setTimeout(() => {
@@ -67,11 +92,11 @@ export const useGameStore = create<GameStore>()(
           ...boardSlice,
           ...playerSlice,
           ...matchSlice,
-          ...gameSlice,
           ...animationSlice,
           ...eventSlice,
           ...blessingSlice,
           ...itemSlice,
+          ...gameSlice,
           
           waitForNextFrame: () => new Promise<void>(resolve => {
             requestAnimationFrame(() => resolve());
@@ -102,10 +127,15 @@ export const useGameStore = create<GameStore>()(
                 }))
               );
               
-              // Reset Maps using Immer's draft state
-              state.activeAnimations.clear();
-              state.sequences.clear();
-              state.events.clear();
+              // Reset Maps using new Map instances
+              state.animationState = {
+                activeAnimations: new Map(),
+                sequences: new Map()
+              };
+              state.eventState = {
+                events: new Map(),
+                middleware: []
+              };
               
               // Reset battle state
               state.battleState = {
@@ -145,5 +175,9 @@ export const useGameStore = create<GameStore>()(
       name: 'game-store',
       enabled: process.env.NODE_ENV === 'development'
     }
-  )
-); 
+  ),
+  shallow
+);
+
+// Apply selectors to the store
+export const useGameStore = createSelectors(useGameStoreBase); 

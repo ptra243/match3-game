@@ -37,7 +37,16 @@ const DamageTooltip: React.FC<DamageTooltipProps> = ({ color, isPrimary }) => {
 export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({ player, position }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const { human, ai, currentPlayer, toggleSkill, useSkill, aiDifficulty, setAiDifficulty } = useGameStore();
+  
+  // Use auto-generated selectors
+  const human = useGameStore.use.human();
+  const ai = useGameStore.use.ai();
+  const currentPlayer = useGameStore.use.currentPlayer();
+  const toggleSkill = useGameStore.use.toggleSkill();
+  const useSkill = useGameStore.use.useSkill();
+  const aiDifficulty = useGameStore.use.aiDifficulty();
+  const setAiDifficulty = useGameStore.use.setAiDifficulty();
+
   const playerState = player === 'human' ? human : ai;
   const isCurrentPlayer = currentPlayer === player;
   const characterClass = CLASSES[playerState.className];

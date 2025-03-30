@@ -179,8 +179,10 @@ export interface GameState extends
   BlessingSlice,
   ItemSlice {
   // Additional state properties
-  activeAnimations: Map<string, AnimationInfo>;
-  sequences: Map<string, AnimationSequence>;
+  animationState: {
+    activeAnimations: Map<string, AnimationInfo>;
+    sequences: Map<string, AnimationSequence>;
+  };
   currentPlayer: Player;
   human: PlayerState;
   ai: PlayerState;

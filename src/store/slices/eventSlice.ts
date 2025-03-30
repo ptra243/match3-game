@@ -76,8 +76,10 @@ export type EventMiddleware = (
 ) => void;
 
 export interface EventSlice {
-  events: Map<GameEventType, Set<EventHandler>>;
-  middleware: EventMiddleware[];
+  eventState: {
+    events: Map<GameEventType, Set<EventHandler>>;
+    middleware: EventMiddleware[];
+  };
   
   // Event registration
   on: (eventType: GameEventType, handler: EventHandler) => () => void;
@@ -92,17 +94,27 @@ export interface EventSlice {
 
 export const createEventSlice: StateCreator<GameState, [], [], EventSlice> = (set, get) => {
   return {
-    events: new Map<GameEventType, Set<EventHandler>>(),
-    middleware: [],
+    eventState: {
+      events: new Map<GameEventType, Set<EventHandler>>(),
+      middleware: []
+    },
     
     on: (eventType, handler) => {
       set((state) => {
-        if (!state.events.has(eventType)) {
-          state.events.set(eventType, new Set());
+        // Create new Map for events
+        const newEvents = new Map(state.eventState.events);
+        if (!newEvents.has(eventType)) {
+          newEvents.set(eventType, new Set());
         }
         
-        const handlers = state.events.get(eventType)!;
+        const handlers = newEvents.get(eventType)!;
         handlers.add(handler);
+        
+        // Update the event state with new Map
+        state.eventState = {
+          ...state.eventState,
+          events: newEvents
+        };
         
         debugLog('EVENT_SLICE', `Registered handler for ${eventType}`);
         return state;
@@ -114,23 +126,39 @@ export const createEventSlice: StateCreator<GameState, [], [], EventSlice> = (se
     
     off: (eventType, handler) => {
       set((state) => {
-        if (state.events.has(eventType)) {
-          const handlers = state.events.get(eventType)!;
+        // Create new Map for events
+        const newEvents = new Map(state.eventState.events);
+        if (newEvents.has(eventType)) {
+          const handlers = newEvents.get(eventType)!;
           handlers.delete(handler);
           
           debugLog('EVENT_SLICE', `Unregistered handler for ${eventType}`);
           
           if (handlers.size === 0) {
-            state.events.delete(eventType);
+            newEvents.delete(eventType);
           }
         }
+
+        // Update the event state with new Map
+        state.eventState = {
+          ...state.eventState,
+          events: newEvents
+        };
         return state;
       });
     },
     
     addMiddleware: (middleware) => {
       set((state) => {
-        state.middleware.push(middleware);
+        // Create new array for middleware
+        const newMiddleware = [...state.eventState.middleware, middleware];
+        
+        // Update the event state with new middleware array
+        state.eventState = {
+          ...state.eventState,
+          middleware: newMiddleware
+        };
+        
         debugLog('EVENT_SLICE', 'Added event middleware');
         return state;
       });
@@ -138,7 +166,15 @@ export const createEventSlice: StateCreator<GameState, [], [], EventSlice> = (se
       // Return function to remove middleware
       return () => {
         set((state) => {
-          state.middleware = state.middleware.filter(m => m !== middleware);
+          // Create new array for middleware
+          const newMiddleware = state.eventState.middleware.filter(m => m !== middleware);
+          
+          // Update the event state with new middleware array
+          state.eventState = {
+            ...state.eventState,
+            middleware: newMiddleware
+          };
+          
           debugLog('EVENT_SLICE', 'Removed event middleware');
           return state;
         });
@@ -148,13 +184,13 @@ export const createEventSlice: StateCreator<GameState, [], [], EventSlice> = (se
     emit: (eventType, payload) => {
       debugLog('EVENT_SLICE', `Emitting event: ${eventType}`, payload);
       
-      const events = get().events;
+      const events = get().eventState.events;
       if (!events.has(eventType)) {
         return; // No handlers for this event type
       }
       
       const handlers = events.get(eventType)!;
-      const middleware = get().middleware;
+      const middleware = get().eventState.middleware;
       
       // Apply middleware chain
       const runEvent = (handler: EventHandler, event: GameEventPayload) => {

@@ -146,50 +146,18 @@ export const createBoardSlice: StateCreator<GameState, [], [], BoardSlice> = (se
     // Process each column from bottom to top
     for (let col = 0; col < BOARD_SIZE; col++) {
       for (let row = BOARD_SIZE - 1; row >= 0; row--) {
-        // If this tile has been dropped, check if the tile above needs to be dropped
-        if (droppedTiles.has(`${row},${col}`)) {
-          let sourceRow = row - 1;
-          while (sourceRow >= 0 &&
-            (state.board[sourceRow][col].color === 'empty' ||
-              state.board[sourceRow][col].isFrozen)) {
-            sourceRow--;
-          }
-
-          if (sourceRow >= 0) {
-            hasDropped = true;
-            const sourceColor = state.board[sourceRow][col].color;
-
-            // Register animation for this specific tile
-            const tileId = `tile-${row}-${col}`;
-            const animId = get().registerAnimation('fallIn', [tileId], {
-              fromRow: sourceRow,
-              toRow: row,
-              col: col,
-              color: sourceColor
-            });
-
-            drops.push({
-              fromRow: sourceRow,
-              fromCol: col,
-              toRow: row,
-              toCol: col,
-              color: sourceColor,
-              animId
-            });
-
-            // Mark the source tile as dropped
-            droppedTiles.add(`${sourceRow},${col}`);
-          }
+        // Skip if tile is frozen
+        if (state.board[row][col].isFrozen) {
           continue;
         }
 
-        // Otherwise, check if this tile needs to be dropped
-        if (state.board[row][col].color === 'empty') {
-          // Find the next non-empty, non-frozen tile above
+        // If current tile is empty or has been dropped, find the next non-empty tile above
+        if (state.board[row][col].color === 'empty' || droppedTiles.has(`${row},${col}`)) {
           let sourceRow = row - 1;
           while (sourceRow >= 0 &&
             (state.board[sourceRow][col].color === 'empty' ||
-              state.board[sourceRow][col].isFrozen)) {
+              state.board[sourceRow][col].isFrozen ||
+              droppedTiles.has(`${sourceRow},${col}`))) {
             sourceRow--;
           }
 

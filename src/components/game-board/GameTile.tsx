@@ -31,16 +31,15 @@ export const GameTile: React.FC<GameTileProps> = ({
   isDragging, 
   isAiSelected
 }) => {
-  const { 
-    currentPlayer, 
-    selectedTile, 
-    human, 
-    selectTile, 
-    useSkill, 
-    updateTile,
-    getCurrentAnimation,
-    completeAnimation
-  } = useGameStore();
+  // Use auto-generated selectors - no need for useShallow
+  const currentPlayer = useGameStore.use.currentPlayer();
+  const selectedTile = useGameStore.use.selectedTile();
+  const human = useGameStore.use.human();
+  const getCurrentAnimation = useGameStore.use.getCurrentAnimation();
+  const completeAnimation = useGameStore.use.completeAnimation();
+  const selectTile = useGameStore.use.selectTile();
+  const useSkill = useGameStore.use.useSkill();
+  const updateTile = useGameStore.use.updateTile();
     
   const activeSkill = human.activeSkillId !== null ? ALL_SKILLS[human.activeSkillId] : null;
   const isSkillActive = currentPlayer === 'human' && activeSkill !== null;

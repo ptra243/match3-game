@@ -23,6 +23,8 @@ export interface MatchSlice {
     findMatches: (board: Tile[][]) => Match[];
     hasValidMoves: () => boolean;
     wouldCreateMatch: (row1: number, col1: number, row2: number, col2: number) => boolean;
+    incrementCombo: () => void;
+    resetCombo: () => void;
 }
 
 class UnionFind {
@@ -103,6 +105,16 @@ class UnionFind {
 export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (set, get) => ({
     currentMatchSequence: 0,
     currentCombo: 0,
+
+    incrementCombo: () => {
+        set((state) => ({
+            currentCombo: state.currentCombo + 1
+        }));
+    },
+
+    resetCombo: () => {
+        set({ currentCombo: 0 });
+    },
 
     findMatches: (board: Tile[][]): Match[] => {
         const BOARD_SIZE = board.length;
@@ -512,7 +524,7 @@ export const createMatchSlice: StateCreator<GameState, [], [], MatchSlice> = (se
             debugLog('MATCH_SLICE', 'Matches processed, calculating fall-in', {
                 deadTiles: deadTiles.length,
                 matchedTiles: matched.length,
-                animationCount: get().activeAnimations.size
+                animationCount: get().animationState.activeAnimations.size
             });
         }
 
